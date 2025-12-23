@@ -1,20 +1,19 @@
 # ============================================================
-# FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD SAFE VERSION)
+# FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD)
 # ============================================================
-# FIXED FOR BEGINNERS:
-# Streamlit Cloud does NOT have the new OpenAI SDK by default.
-# This version uses the older, built-in `openai` package
-# which IS available on Streamlit Cloud.
+# FIXED (IMPORTANT):
+# Streamlit Cloud now installs openai>=1.0.0 by default.
+# This version correctly uses the NEW OpenAI Python SDK.
 # ============================================================
 
 import streamlit as st
-import openai
+from openai import OpenAI
 
 # ------------------------------
 # Page Setup
 # ------------------------------
-st.set_page_config(page_title='Rebbe Security Encyclopedia', layout='wide')
-st.title('Rebbe Security Encyclopedia')
+st.set_page_config(page_title="Rebbe Security Encyclopedia", layout="wide")
+st.title("Rebbe Security Encyclopedia")
 st.markdown(
     "Ask a question and receive an encyclopedia-style answer based on the teachings of the Lubavitcher Rebbe on security for the Land of Israel."
 )
@@ -34,7 +33,8 @@ if "OPENAI_API_KEY" not in st.secrets:
     )
     st.stop()
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Initialize OpenAI client (NEW SDK)
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ------------------------------
 # Question Input (MAIN PAGE)
@@ -48,16 +48,16 @@ question = st.text_area(
 # ------------------------------
 # Generate AI Answer
 # ------------------------------
-def generate_ai_answer(question: str):
+def generate_ai_answer(question: str) -> str:
     prompt = (
         "You are writing an encyclopedia entry.\n"
         "Answer ONLY based on the teachings of the Lubavitcher Rebbe regarding security and the Land of Israel.\n"
-        "Write clearly, with structure and depth.\n\n"
+        "Write clearly, with structure, sources implied, and depth.\n\n"
         f"Question: {question}"
     )
 
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    response = client.chat.completions.create(
+        model="gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
     )
