@@ -1,13 +1,9 @@
 # ============================================================
-# GROKPEDIA-STYLE AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD)
+# AI-POWERED GROKPEDIA-STYLE ENCYCLOPEDIA WITH QUESTION ANSWERING
+# REBBE SECURITY (STREAMLIT CLOUD)
 # ============================================================
-# We are now following the 5-step roadmap to create a Grokpedia-like encyclopedia.
-# Steps being implemented:
-# 1. Lock AI to your sources (JEM texts & website material)
-# 2. Generate real, structured articles for each topic
-# 3. Add citations and source references
-# 4. Internal linking between topics
-# 5. Search/index functionality for navigation
+# Now the AI serves dual purpose: answers user questions based on the knowledge base and existing articles,
+# and generates structured encyclopedia-style entries.
 # ============================================================
 
 import streamlit as st
@@ -19,7 +15,7 @@ from openai import OpenAI
 st.set_page_config(page_title="Rebbe Security Encyclopedia", layout="wide")
 st.title("Rebbe Security Encyclopedia")
 st.markdown(
-    "This AI generates encyclopedia-style articles based strictly on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel, with structured content and cross-topic links like Grokpedia."
+    "This AI answers user questions and generates encyclopedia-style articles strictly based on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel."
 )
 
 # ------------------------------
@@ -40,7 +36,7 @@ if "OPENAI_API_KEY" not in st.secrets:
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ------------------------------
-# Multi-Topic Setup for Grokpedia
+# Multi-Topic Knowledge Base
 # ------------------------------
 topics = [
     "Preemptive Defense",
@@ -48,38 +44,33 @@ topics = [
     "The 329 Paradigm"
 ]
 
-# Store generated articles and references
+# Store generated articles
 if 'articles' not in st.session_state:
     st.session_state['articles'] = {}
 
-if 'references' not in st.session_state:
-    st.session_state['references'] = {}
-
 # ------------------------------
-# Topic Selection
+# User Question Input
 # ------------------------------
-selected_topic = st.selectbox("Select a topic to generate/view:", topics)
-
-# ------------------------------
-# Optional Context Input
-# ------------------------------
-context = st.text_area(
-    "Additional context or notes (optional)",
-    height=100,
-    placeholder="Add context to guide the AI (optional)"
+user_question = st.text_area(
+    "Ask a question or request an article:",
+    height=150,
+    placeholder="e.g., What did the Rebbe say about preemptive defense?"
 )
 
 # ------------------------------
-# Generate AI Encyclopedia Article with citations
+# AI Function: Answer Questions or Generate Articles
 # ------------------------------
-def generate_grokpedia_article(topic: str, context: str) -> str:
+def answer_question_or_generate_article(question: str) -> str:
+    # Collect context from previously generated articles
+    knowledge_context = "\n\n".join(st.session_state['articles'].values())
+
     prompt = (
-        f"You are writing a Grokpedia-style encyclopedia entry on **{topic}**.\n"
-        "Answer ONLY using the teachings of the Lubavitcher Rebbe on security for the Land of Israel.\n"
-        "Provide a structured article in descriptive + explanatory style with these sections: Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion.\n"
-        "Include citations or references whenever a specific letter, sicha, or source applies.\n"
-        "Highlight internal links to related topics (Preemptive Defense, Ownership of Israel, The 329 Paradigm).\n"
-        f"Additional context from the user: {context}"
+        f"You are an AI Grokpedia assistant. Answer the user's question or generate an encyclopedia-style article.\n"
+        f"Use ONLY the knowledge from the Lubavitcher Rebbe's teachings and any previously generated articles provided.\n"
+        f"Structure the answer clearly and include sections if appropriate (Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion).\n"
+        f"Cite sources or previously generated material when relevant.\n\n"
+        f"Knowledge context: {knowledge_context}\n"
+        f"User question: {question}"
     )
 
     response = client.chat.completions.create(
@@ -93,20 +84,29 @@ def generate_grokpedia_article(topic: str, context: str) -> str:
 # ------------------------------
 # Submit Button
 # ------------------------------
-if st.button("Generate Article"):
-    with st.spinner(f"Generating Grokpedia-style article for {selected_topic}..."):
-        try:
-            article = generate_grokpedia_article(selected_topic, context.strip())
-            st.session_state['articles'][selected_topic] = article
-            st.subheader(selected_topic)
-            st.write(article)
-        except Exception as e:
-            st.error(f"Error generating article: {e}")
+if st.button("Ask"):
+    if not user_question.strip():
+        st.warning("Please enter a question or request.")
+    else:
+        with st.spinner("Generating answer/article..."):
+            try:
+                answer = answer_question_or_generate_article(user_question.strip())
+                st.subheader("Answer / Article")
+                st.write(answer)
+
+                # Optionally store article if it appears encyclopedic
+                st.session_state['articles'][user_question] = answer
+
+            except Exception as e:
+                st.error(f"Error generating answer/article: {e}")
 
 # ------------------------------
-# Display previously generated articles
+# Display Previously Generated Articles
 # ------------------------------
-if selected_topic in st.session_state['articles']:
+if st.session_state['articles']:
     st.markdown("---")
-    st.subheader(f"Previously generated article for {selected_topic}")
-    st.write(st.session_state['articles'][selected_topic])
+    st.subheader("Previously generated articles / answers")
+    for q, a in st.session_state['articles'].items():
+        st.markdown(f"**Request / Question:** {q}")
+        st.write(a)
+        st.markdown("---")
