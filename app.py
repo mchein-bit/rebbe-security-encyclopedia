@@ -78,4 +78,3 @@ if st.button("Ask"):
                 st.write(answer)
             except Exception as e:
                 st.error(f"Error generating answer: {e}")
-
