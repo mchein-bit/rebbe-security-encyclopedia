@@ -1,8 +1,13 @@
 # ============================================================
-# FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD)
+# GROKPEDIA-STYLE AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD)
 # ============================================================
-# NEXT DEVELOPMENT STEP: MULTI-TOPIC DYNAMIC AI ENCYCLOPEDIA
-# Now capable of handling multiple topics while keeping structured encyclopedia style
+# We are now following the 5-step roadmap to create a Grokpedia-like encyclopedia.
+# Steps being implemented:
+# 1. Lock AI to your sources (JEM texts & website material)
+# 2. Generate real, structured articles for each topic
+# 3. Add citations and source references
+# 4. Internal linking between topics
+# 5. Search/index functionality for navigation
 # ============================================================
 
 import streamlit as st
@@ -14,7 +19,7 @@ from openai import OpenAI
 st.set_page_config(page_title="Rebbe Security Encyclopedia", layout="wide")
 st.title("Rebbe Security Encyclopedia")
 st.markdown(
-    "This AI generates full encyclopedia-style articles based on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel."
+    "This AI generates encyclopedia-style articles based strictly on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel, with structured content and cross-topic links like Grokpedia."
 )
 
 # ------------------------------
@@ -35,7 +40,7 @@ if "OPENAI_API_KEY" not in st.secrets:
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ------------------------------
-# Select Topic
+# Multi-Topic Setup for Grokpedia
 # ------------------------------
 topics = [
     "Preemptive Defense",
@@ -43,7 +48,17 @@ topics = [
     "The 329 Paradigm"
 ]
 
-selected_topic = st.selectbox("Select the topic you want an encyclopedia article on:", topics)
+# Store generated articles and references
+if 'articles' not in st.session_state:
+    st.session_state['articles'] = {}
+
+if 'references' not in st.session_state:
+    st.session_state['references'] = {}
+
+# ------------------------------
+# Topic Selection
+# ------------------------------
+selected_topic = st.selectbox("Select a topic to generate/view:", topics)
 
 # ------------------------------
 # Optional Context Input
@@ -51,19 +66,19 @@ selected_topic = st.selectbox("Select the topic you want an encyclopedia article
 context = st.text_area(
     "Additional context or notes (optional)",
     height=100,
-    placeholder="You can type extra details or leave blank."
+    placeholder="Add context to guide the AI (optional)"
 )
 
 # ------------------------------
-# Generate AI Encyclopedia Article
+# Generate AI Encyclopedia Article with citations
 # ------------------------------
-def generate_article(topic: str, context: str) -> str:
+def generate_grokpedia_article(topic: str, context: str) -> str:
     prompt = (
-        f"You are writing an encyclopedia entry on the topic **{topic}**.\n"
-        "Answer ONLY based on the teachings of the Lubavitcher Rebbe regarding security and the Land of Israel.\n"
-        "Write in a descriptive + explanatory style.\n"
-        "Use formal, structured language with sections: Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion.\n"
-        "Do NOT provide opinion or unrelated information.\n\n"
+        f"You are writing a Grokpedia-style encyclopedia entry on **{topic}**.\n"
+        "Answer ONLY using the teachings of the Lubavitcher Rebbe on security for the Land of Israel.\n"
+        "Provide a structured article in descriptive + explanatory style with these sections: Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion.\n"
+        "Include citations or references whenever a specific letter, sicha, or source applies.\n"
+        "Highlight internal links to related topics (Preemptive Defense, Ownership of Israel, The 329 Paradigm).\n"
         f"Additional context from the user: {context}"
     )
 
@@ -79,10 +94,19 @@ def generate_article(topic: str, context: str) -> str:
 # Submit Button
 # ------------------------------
 if st.button("Generate Article"):
-    with st.spinner(f"Generating encyclopedia article for {selected_topic}..."):
+    with st.spinner(f"Generating Grokpedia-style article for {selected_topic}..."):
         try:
-            answer = generate_article(selected_topic, context.strip())
+            article = generate_grokpedia_article(selected_topic, context.strip())
+            st.session_state['articles'][selected_topic] = article
             st.subheader(selected_topic)
-            st.write(answer)
+            st.write(article)
         except Exception as e:
             st.error(f"Error generating article: {e}")
+
+# ------------------------------
+# Display previously generated articles
+# ------------------------------
+if selected_topic in st.session_state['articles']:
+    st.markdown("---")
+    st.subheader(f"Previously generated article for {selected_topic}")
+    st.write(st.session_state['articles'][selected_topic])
