@@ -1,14 +1,14 @@
 # ============================================================
-# FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT PLAYGROUND SAFE VERSION)
+# FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD SAFE VERSION)
 # ============================================================
-# IMPORTANT:
-# Streamlit Playground / Streamlit Cloud does NOT allow API keys
-# to be entered safely in a text box.
-# This version correctly uses Streamlit SECRETS.
+# FIXED FOR BEGINNERS:
+# Streamlit Cloud does NOT have the new OpenAI SDK by default.
+# This version uses the older, built-in `openai` package
+# which IS available on Streamlit Cloud.
 # ============================================================
 
 import streamlit as st
-from openai import OpenAI
+import openai
 
 # ------------------------------
 # Page Setup
@@ -25,25 +25,30 @@ st.markdown(
 if "OPENAI_API_KEY" not in st.secrets:
     st.error(
         "OpenAI API key not found.\n\n"
-        "Since you are using the Streamlit Playground, you must add your API key in **Secrets**.\n\n"
-        "Go to: ⚙️ Settings → Secrets and add:\n"
+        "You are using Streamlit Cloud. You must add your API key in **Secrets**.\n\n"
+        "Steps:\n"
+        "1. Click ⚙️ Settings\n"
+        "2. Click Secrets\n"
+        "3. Add:\n"
         "OPENAI_API_KEY = sk-..."
     )
     st.stop()
 
-api_key = st.secrets["OPENAI_API_KEY"]
+openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 # ------------------------------
 # Question Input (MAIN PAGE)
 # ------------------------------
-question = st.text_area("Your question", height=150, placeholder="e.g. What did the Rebbe say about preemptive defense?")
+question = st.text_area(
+    "Your question",
+    height=150,
+    placeholder="e.g. What did the Rebbe say about preemptive defense?"
+)
 
 # ------------------------------
 # Generate AI Answer
 # ------------------------------
 def generate_ai_answer(question: str):
-    client = OpenAI(api_key=api_key)
-
     prompt = (
         "You are writing an encyclopedia entry.\n"
         "Answer ONLY based on the teachings of the Lubavitcher Rebbe regarding security and the Land of Israel.\n"
@@ -51,8 +56,8 @@ def generate_ai_answer(question: str):
         f"Question: {question}"
     )
 
-    response = client.chat.completions.create(
-        model="gpt-4.1",
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.2,
     )
@@ -73,3 +78,4 @@ if st.button("Ask"):
                 st.write(answer)
             except Exception as e:
                 st.error(f"Error generating answer: {e}")
+
