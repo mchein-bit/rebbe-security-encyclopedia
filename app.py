@@ -1,8 +1,8 @@
 # ============================================================
 # FUNCTIONING AI ENCYCLOPEDIA - REBBE SECURITY (STREAMLIT CLOUD)
 # ============================================================
-# LOCKED TO ONE TOPIC: PREEMPTIVE DEFENSE
-# STEP: Descriptive + Explanatory (B)
+# NEXT DEVELOPMENT STEP: MULTI-TOPIC DYNAMIC AI ENCYCLOPEDIA
+# Now capable of handling multiple topics while keeping structured encyclopedia style
 # ============================================================
 
 import streamlit as st
@@ -14,7 +14,7 @@ from openai import OpenAI
 st.set_page_config(page_title="Rebbe Security Encyclopedia", layout="wide")
 st.title("Rebbe Security Encyclopedia")
 st.markdown(
-    "This AI generates a full encyclopedia-style article on the topic **Preemptive Defense** according to the teachings of the Lubavitcher Rebbe."
+    "This AI generates full encyclopedia-style articles based on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel."
 )
 
 # ------------------------------
@@ -32,27 +32,37 @@ if "OPENAI_API_KEY" not in st.secrets:
     )
     st.stop()
 
-# Initialize OpenAI client (NEW SDK)
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ------------------------------
-# Question Input (MAIN PAGE)
+# Select Topic
 # ------------------------------
-question = st.text_area(
-    "Your prompt (optional, the AI will focus on Preemptive Defense)",
-    height=150,
-    placeholder="You can type additional context or leave blank."
+topics = [
+    "Preemptive Defense",
+    "Ownership of Israel",
+    "The 329 Paradigm"
+]
+
+selected_topic = st.selectbox("Select the topic you want an encyclopedia article on:", topics)
+
+# ------------------------------
+# Optional Context Input
+# ------------------------------
+context = st.text_area(
+    "Additional context or notes (optional)",
+    height=100,
+    placeholder="You can type extra details or leave blank."
 )
 
 # ------------------------------
-# Generate Encyclopedia Article
+# Generate AI Encyclopedia Article
 # ------------------------------
-def generate_preemptive_defense_article(context: str) -> str:
+def generate_article(topic: str, context: str) -> str:
     prompt = (
-        "You are writing an encyclopedia entry on the topic **Preemptive Defense**.\n"
+        f"You are writing an encyclopedia entry on the topic **{topic}**.\n"
         "Answer ONLY based on the teachings of the Lubavitcher Rebbe regarding security and the Land of Israel.\n"
         "Write in a descriptive + explanatory style.\n"
-        "Use formal, structured language, with sections: Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion.\n"
+        "Use formal, structured language with sections: Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion.\n"
         "Do NOT provide opinion or unrelated information.\n\n"
         f"Additional context from the user: {context}"
     )
@@ -69,10 +79,10 @@ def generate_preemptive_defense_article(context: str) -> str:
 # Submit Button
 # ------------------------------
 if st.button("Generate Article"):
-    with st.spinner("Generating Preemptive Defense encyclopedia article..."):
+    with st.spinner(f"Generating encyclopedia article for {selected_topic}..."):
         try:
-            answer = generate_preemptive_defense_article(question.strip())
-            st.subheader("Preemptive Defense")
+            answer = generate_article(selected_topic, context.strip())
+            st.subheader(selected_topic)
             st.write(answer)
         except Exception as e:
             st.error(f"Error generating article: {e}")
