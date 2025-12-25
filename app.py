@@ -94,9 +94,9 @@ def answer_question_or_generate_article(question: str) -> str:
     if len(results) == 0:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
-    # Fix f-string with proper closing bracket
-    library_context = "\n\n".join([f"[From {r['source']}]
-{r['text']}" for r in results])
+    # Corrected f-string with proper quotes and bracket
+    library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in results])
+
     prompt = f'''
 You are an AI Grokpedia assistant.
 Answer ONLY using the material provided below.
