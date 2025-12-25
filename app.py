@@ -1,23 +1,27 @@
+import streamlit as st
+
+st.title("Rebbe Security Encyclopedia")
+st.write("Ask any question about the Rebbe's teachings on security for Israel.")
+
 # ------------------------------
-# AI FUNCTION (USES SEARCHED CONTEXT ONLY) WITH DEBUGGING
+# AI FUNCTION WITH DEBUGGING AND STABILITY
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
-    '''Answer questions using searched context + prior articles with debug messages.''' 
-
+    '''Answer questions using uploaded documents and prior articles, with debug messages.'''
     try:
-        st.write("Debug: Starting answer generation")
+        st.write("Debug: AI function called")
 
-        # Merge previously generated content safely
+        # Merge previously generated articles safely
         article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
         st.write(f"Debug: article_context length = {len(article_context)}")
 
-        # Pull ONLY the relevant passages from uploaded docs
-        results = search_library(question)
+        # Pull ONLY relevant passages from uploaded documents
+        results = st.session_state.get('library_chunks', [])
         library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in results])
         st.write(f"Debug: library_context length = {len(library_context)}")
 
-        # Multiline prompt using triple quotes
+        # Prepare the prompt for the AI
         prompt = f'''
 You are an AI Grokpedia assistant.
 Answer ONLY using the material provided below.
@@ -45,6 +49,7 @@ Quote or summarize specific passages and name the document when possible.
 
         st.write("Debug: Prompt created")
 
+        # Call OpenAI API
         response = client.chat.completions.create(
             model="gpt-4.1",
             messages=[{"role": "user", "content": prompt}],
@@ -57,3 +62,14 @@ Quote or summarize specific passages and name the document when possible.
     except Exception as e:
         st.error(f"Error in generating answer: {e}")
         return ""
+
+# ------------------------------
+# USER QUESTION UI
+# ------------------------------
+
+question = st.text_input("Type your question here:")
+
+if question:
+    answer = answer_question_or_generate_article(question)
+    st.subheader("Answer")
+    st.write(answer)
