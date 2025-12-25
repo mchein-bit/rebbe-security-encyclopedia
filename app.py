@@ -24,9 +24,9 @@ if uploaded_files:
         else:
             text = ""
 
-        # Break text into chunks
-        chunk_size = 600
-        overlap = 120
+        # Break text into smaller chunks to avoid too large prompts
+        chunk_size = 300  # smaller chunks to prevent prompt size issues
+        overlap = 50
         words = text.split()
         i = 0
         while i < len(words):
@@ -41,7 +41,7 @@ if uploaded_files:
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
-    '''Answer questions using uploaded documents and prior articles, with debug messages.'''
+    '''Answer questions using uploaded documents and prior articles, with debug messages.''' 
     try:
         st.write("Debug: AI function called")
 
@@ -51,7 +51,14 @@ def answer_question_or_generate_article(question: str) -> str:
 
         # Pull ONLY relevant passages from uploaded documents
         results = st.session_state.get('library_chunks', [])
-        library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in results])
+        if len(results) == 0:
+            st.warning("No documents uploaded. Please upload files to generate answers.")
+            return ""
+
+        # Use only first 3 chunks to prevent too large prompts (adjust as needed)
+        max_chunks = 3
+        selected_chunks = results[:max_chunks]
+        library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in selected_chunks])
         st.write(f"Debug: library_context length = {len(library_context)}")
 
         # Prepare the prompt for the AI
