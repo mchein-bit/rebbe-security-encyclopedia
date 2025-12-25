@@ -119,31 +119,103 @@ user_question = st.text_area(
 )
 
 # ------------------------------
-# AI FUNCTION (USES ARTICLES + UPLOADED DOCUMENTS)
+# KNOWLEDGE SEARCH (RETRIEVAL)
+# ------------------------------
+
+# We switch from "dump everything" to a search system:
+# 1) Break each document into small chunks.
+# 2) When the user asks something, find the most relevant chunks.
+# 3) Send ONLY those chunks to the AI (faster + more accurate).
+
+if 'library_chunks' not in st.session_state:
+    st.session_state['library_chunks'] = []  # each item: {"text": str, "source": str}
+
+
+def chunk_text(text: str, size: int = 600, overlap: int = 120):
+    """Split long text into overlapping chunks."""
+    words = text.split()
+    chunks = []
+    i = 0
+    while i < len(words):
+        chunk = " ".join(words[i : i + size])
+        chunks.append(chunk)
+        i += size - overlap
+    return chunks
+
+# Convert uploaded docs -> searchable chunks
+if st.session_state['library_texts']:
+    st.session_state['library_chunks'] = []
+    for idx, doc in enumerate(st.session_state['library_texts']):
+        for ch in chunk_text(doc):
+            st.session_state['library_chunks'].append({
+                "text": ch,
+                "source": f"Document {idx + 1}"
+            })
+
+
+def score_chunk(question: str, chunk: str) -> int:
+    """Very simple keyword scoring (no extra libraries)."""
+    q_words = set(question.lower().split())
+    c_words = set(chunk.lower().split())
+    return len(q_words & c_words)
+
+
+def search_library(question: str, top_k: int = 6):
+    """Return the most relevant chunks for the question."""
+    ranked = sorted(
+        st.session_state['library_chunks'],
+        key=lambda c: score_chunk(question, c['text']),
+        reverse=True,
+    )
+    return ranked[:top_k]
+
+
+# ------------------------------
+# AI FUNCTION (USES SEARCHED CONTEXT ONLY)
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
     # Merge previously generated content
-    article_context = "\n\n".join(st.session_state['articles'].values())
+    article_context = "
 
-    # Merge uploaded documents
-    library_context = "\n\n".join(st.session_state['library_texts'])
+".join(st.session_state['articles'].values())
+
+    # Pull ONLY the relevant passages from uploaded docs
+    results = search_library(question)
+    library_context = "
+
+".join([f"[From {r['source']}]
+{r['text']}" for r in results])
 
     prompt = (
-        "You are an AI Grokpedia assistant. Answer ONLY using the material provided.\n"
-        "If a clear source is not present in the context, say you don't have enough information.\n"
-        "Prefer accuracy over speculation.\n\n"
-        "Write answers in a structured way when helpful (Overview, Principles, Halachic Basis, Implications, Conclusion).\n"
-        "Quote or summarize specific lines when possible, and reference which document or idea it comes from.\n\n"
-        f"=== CONTEXT: PREVIOUS ARTICLES ===\n{article_context}\n\n"
-        f"=== CONTEXT: UPLOADED DOCUMENTS ===\n{library_context}\n\n"
-        f"=== USER QUESTION ===\n{question}"
+        "You are an AI Grokpedia assistant. Answer ONLY using the material provided.
+"
+        "If a clear source is not present in the context, say you don't have enough information.
+"
+        "Prefer accuracy over speculation.
+
+"
+        "When helpful, organize answers with sections like Overview, Principles, Halachic Basis, Implications, Conclusion.
+"
+        "Quote or summarize specific lines and mention which document they came from when possible.
+
+"
+        f"=== CONTEXT: PREVIOUS ARTICLES ===
+{article_context}
+
+"
+        f"=== CONTEXT: RELEVANT SOURCES (SEARCHED) ===
+{library_context}
+
+"
+        f"=== USER QUESTION ===
+{question}"
     )
 
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.1,
+        temperature=0.15,
     )
 
     return response.choices[0].message.content
