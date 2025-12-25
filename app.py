@@ -27,8 +27,6 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 # Read the service account JSON from Streamlit secrets safely
 try:
     service_account_json_str = st.secrets["google"]["service_account_json"]
-    # Replace literal newlines with escaped newlines
-    service_account_json_str = service_account_json_str.replace('\\n', '\\n')
     service_account_info = json.loads(service_account_json_str)
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info, scopes=SCOPES
@@ -38,51 +36,53 @@ except Exception as e:
     st.error(f"Google Drive authentication failed. Check that your JSON in secrets is valid: {e}")
     st.stop()
 
-# Input folder ID
-FOLDER_ID = st.text_input("Enter Google Drive Folder ID:")
+# Input multiple folder IDs
+folder_ids_input = st.text_area("Enter Google Drive Folder IDs (one per line):")
+folder_ids = [f.strip() for f in folder_ids_input.splitlines() if f.strip()]
 
-if FOLDER_ID:
-    try:
-        query = f"'{FOLDER_ID}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')"
-        results = service.files().list(q=query, pageSize=100, fields="files(id, name, mimeType)").execute()
-        files = results.get('files', [])
+if folder_ids:
+    if 'library_chunks' not in st.session_state:
+        st.session_state['library_chunks'] = []
 
-        if files:
-            if 'library_chunks' not in st.session_state:
-                st.session_state['library_chunks'] = []
+    for FOLDER_ID in folder_ids:
+        try:
+            query = f"'{FOLDER_ID}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')"
+            results = service.files().list(q=query, pageSize=100, fields="files(id, name, mimeType)").execute()
+            files = results.get('files', [])
 
-            for file in files:
-                request = service.files().get_media(fileId=file['id'])
-                fh = io.BytesIO()
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while not done:
-                    status, done = downloader.next_chunk()
-                fh.seek(0)
+            if files:
+                for file in files:
+                    request = service.files().get_media(fileId=file['id'])
+                    fh = io.BytesIO()
+                    downloader = MediaIoBaseDownload(fh, request)
+                    done = False
+                    while not done:
+                        status, done = downloader.next_chunk()
+                    fh.seek(0)
 
-                if file['mimeType'] == 'text/plain':
-                    text = fh.read().decode('utf-8')
-                elif file['mimeType'] == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                    doc = docx.Document(fh)
-                    text = "\n".join([p.text for p in doc.paragraphs])
-                else:
-                    text = ""
+                    if file['mimeType'] == 'text/plain':
+                        text = fh.read().decode('utf-8')
+                    elif file['mimeType'] == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                        doc = docx.Document(fh)
+                        text = "\n".join([p.text for p in doc.paragraphs])
+                    else:
+                        text = ""
 
-                # Break text into chunks for AI
-                chunk_size = 150
-                overlap = 50
-                words = text.split()
-                i = 0
-                while i < len(words):
-                    chunk = " ".join(words[i:i+chunk_size])
-                    st.session_state['library_chunks'].append({"source": file['name'], "text": chunk})
-                    i += chunk_size - overlap
+                    # Break text into chunks for AI
+                    chunk_size = 150
+                    overlap = 50
+                    words = text.split()
+                    i = 0
+                    while i < len(words):
+                        chunk = " ".join(words[i:i+chunk_size])
+                        st.session_state['library_chunks'].append({"source": file['name'], "text": chunk})
+                        i += chunk_size - overlap
 
-            st.success(f"Added {len(files)} file(s) from Google Drive to the knowledge library.")
-        else:
-            st.warning("No documents found in this folder.")
-    except Exception as e:
-        st.error(f"Error loading files from Google Drive: {e}")
+                st.success(f"Added {len(files)} file(s) from folder {FOLDER_ID} to the knowledge library.")
+            else:
+                st.warning(f"No documents found in folder {FOLDER_ID}.")
+        except Exception as e:
+            st.error(f"Error loading files from folder {FOLDER_ID}: {e}")
 
 # ------------------------------
 # AI FUNCTION AND USER UI
@@ -96,7 +96,6 @@ def answer_question_or_generate_article(question: str) -> str:
     if len(results) == 0:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
-    # Corrected f-string with proper quotes and bracket
     library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in results])
 
     prompt = f'''
