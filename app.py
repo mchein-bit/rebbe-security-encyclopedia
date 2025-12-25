@@ -51,8 +51,7 @@ def answer_question_or_generate_article(question: str) -> str:
 
         # Pull ONLY relevant passages from uploaded documents
         results = st.session_state.get('library_chunks', [])
-        library_context = "\n\n".join([f"[From {r['source']}]
-{r['text']}" for r in results])
+        library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in results])
         st.write(f"Debug: library_context length = {len(library_context)}")
 
         # Prepare the prompt for the AI
