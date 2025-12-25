@@ -2,6 +2,10 @@ import streamlit as st
 import docx
 from openai import OpenAI
 import os
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2 import service_account
+import io
 
 # ------------------------------
 # OPENAI CLIENT SETUP
@@ -13,61 +17,75 @@ st.title("Rebbe Security Encyclopedia")
 st.write("Ask any question about the Rebbe's teachings on security for Israel.")
 
 # ------------------------------
-# DOCUMENT UPLOAD SECTION
+# GOOGLE DRIVE INTEGRATION
 # ------------------------------
-st.subheader("Upload documents to add to the knowledge library")
-uploaded_files = st.file_uploader("Upload DOCX or TXT files", type=['docx', 'txt'], accept_multiple_files=True)
+st.subheader("Load documents from Google Drive")
 
-if uploaded_files:
-    if 'library_chunks' not in st.session_state:
-        st.session_state['library_chunks'] = []
+# Set path to your service account credentials JSON (add to Streamlit secrets or upload)
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-    for uploaded_file in uploaded_files:
-        # Extract text depending on file type
-        if uploaded_file.type == "text/plain":
-            text = str(uploaded_file.read(), "utf-8")
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            doc = docx.Document(uploaded_file)
-            text = "\n".join([p.text for p in doc.paragraphs])
-        else:
-            text = ""
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+service = build('drive', 'v3', credentials=credentials)
 
-        # Break text into smaller chunks (smaller size helps AI find relevant content)
-        chunk_size = 150
-        overlap = 50
-        words = text.split()
-        i = 0
-        while i < len(words):
-            chunk = " ".join(words[i:i+chunk_size])
-            st.session_state['library_chunks'].append({"source": uploaded_file.name, "text": chunk})
-            i += chunk_size - overlap
+# Specify your folder ID
+FOLDER_ID = st.text_input("Enter Google Drive Folder ID:")
 
-    st.success(f"Added {len(uploaded_files)} file(s) to the knowledge library.")
+if FOLDER_ID:
+    query = f"'{FOLDER_ID}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')"
+    results = service.files().list(q=query, pageSize=100, fields="files(id, name, mimeType)").execute()
+    files = results.get('files', [])
+
+    if files:
+        if 'library_chunks' not in st.session_state:
+            st.session_state['library_chunks'] = []
+
+        for file in files:
+            request = service.files().get_media(fileId=file['id'])
+            fh = io.BytesIO()
+            downloader = MediaIoBaseDownload(fh, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+            fh.seek(0)
+
+            if file['mimeType'] == 'text/plain':
+                text = fh.read().decode('utf-8')
+            elif file['mimeType'] == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                doc = docx.Document(fh)
+                text = "\n".join([p.text for p in doc.paragraphs])
+            else:
+                text = ""
+
+            # Break text into chunks
+            chunk_size = 150
+            overlap = 50
+            words = text.split()
+            i = 0
+            while i < len(words):
+                chunk = " ".join(words[i:i+chunk_size])
+                st.session_state['library_chunks'].append({"source": file['name'], "text": chunk})
+                i += chunk_size - overlap
+
+        st.success(f"Added {len(files)} file(s) from Google Drive to the knowledge library.")
+    else:
+        st.warning("No documents found in this folder.")
 
 # ------------------------------
-# AI FUNCTION WITH DEBUGGING AND STABILITY
+# AI FUNCTION AND USER UI (unchanged from previous version)
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
     '''Answer questions using uploaded documents and prior articles, with debug messages.''' 
     try:
         st.write("Debug: AI function called")
-
-        # Merge previously generated articles safely
         article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
-        st.write(f"Debug: article_context length = {len(article_context)}")
-
-        # Pull relevant passages from uploaded documents
         results = st.session_state.get('library_chunks', [])
         if len(results) == 0:
             st.warning("No documents uploaded. Please upload files to generate answers.")
             return ""
-
-        # Use all chunks to maximize context coverage (for English + Yiddish)
         library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in results])
-        st.write(f"Debug: library_context length = {len(library_context)}")
-
-        # Prepare the prompt for the AI
         prompt = f'''
 You are an AI Grokpedia assistant.
 Answer ONLY using the material provided below.
@@ -94,32 +112,21 @@ Quote or summarize specific passages and name the document when possible.
 === USER QUESTION ===
 {question}
 '''
-
-        st.write("Debug: Prompt created")
-
-        # Call OpenAI API with error handling
         try:
             response = client.chat.completions.create(
                 model="gpt-4.1",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.15,
             )
-            st.write("Debug: Response received")
             return response.choices[0].message.content
         except Exception as e:
             st.error(f"OpenAI API error: {e}")
             return ""
-
     except Exception as e:
         st.error(f"Error in generating answer: {e}")
         return ""
 
-# ------------------------------
-# USER QUESTION UI
-# ------------------------------
-
 question = st.text_input("Type your question here:")
-
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
