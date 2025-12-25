@@ -178,12 +178,17 @@ def answer_question_or_generate_article(question: str) -> str:
     """Answer questions using searched context + prior articles."""
 
     # Merge previously generated content
-    article_context = "\n\n".join(st.session_state['articles'].values())
+    article_context = "
+
+".join(st.session_state['articles'].values())
 
     # Pull ONLY the relevant passages from uploaded docs
     results = search_library(question)
-    library_context = "\n\n".join([
-        f"[From {r['source']}]\n{r['text']}" for r in results
+    library_context = "
+
+".join([
+        f"[From {r['source']}]
+{r['text']}" for r in results
     ])
 
     # Safer, cleaner multiline prompt
