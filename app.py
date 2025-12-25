@@ -177,7 +177,7 @@ def search_library(question: str, top_k: int = 6):
 def answer_question_or_generate_article(question: str) -> str:
     """Answer questions using searched context + prior articles."""
 
-    # Merge previously generated content
+    # Merge previously generated content (safe newline string)
     article_context = "
 
 ".join(st.session_state['articles'].values())
