@@ -26,13 +26,14 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
 # Read the service account JSON from Streamlit secrets safely
 try:
-    service_account_info = json.loads(st.secrets["google"]["service_account_json"])
+    service_account_json_str = st.secrets["google"]["service_account_json"]
+    service_account_info = json.loads(service_account_json_str)
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info, scopes=SCOPES
     )
     service = build('drive', 'v3', credentials=credentials)
 except Exception as e:
-    st.error(f"Google Drive authentication failed: {e}")
+    st.error(f"Google Drive authentication failed. Check that your JSON in secrets is valid: {e}")
     st.stop()
 
 # Input folder ID
@@ -93,7 +94,9 @@ def answer_question_or_generate_article(question: str) -> str:
     if len(results) == 0:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
-    library_context = "\n\n".join([f"[From {r['source']}\n{r['text']}" for r in results])
+    # Fix f-string with proper closing bracket
+    library_context = "\n\n".join([f"[From {r['source']}]
+{r['text']}" for r in results])
     prompt = f'''
 You are an AI Grokpedia assistant.
 Answer ONLY using the material provided below.
