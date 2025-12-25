@@ -1,13 +1,29 @@
 # ============================================================
 # AI-POWERED GROKPEDIA-STYLE ENCYCLOPEDIA WITH QUESTION ANSWERING
+# + DOCUMENT UPLOAD KNOWLEDGE LIBRARY (DOCX + PDF + TXT)
 # REBBE SECURITY (STREAMLIT CLOUD)
 # ============================================================
-# Now the AI serves dual purpose: answers user questions based on the knowledge base and existing articles,
-# and generates structured encyclopedia-style entries.
+# The AI now:
+# - Answers questions AND writes encyclopedia-style responses
+# - Uses previously generated articles
+# - Uses uploaded documents (letters, talks, PDFs, etc.) as sources
 # ============================================================
 
 import streamlit as st
 from openai import OpenAI
+
+# Libraries for reading uploaded files
+from io import BytesIO
+
+try:
+    import docx  # python-docx
+except Exception:
+    docx = None
+
+try:
+    import PyPDF2
+except Exception:
+    PyPDF2 = None
 
 # ------------------------------
 # Page Setup
@@ -15,7 +31,7 @@ from openai import OpenAI
 st.set_page_config(page_title="Rebbe Security Encyclopedia", layout="wide")
 st.title("Rebbe Security Encyclopedia")
 st.markdown(
-    "This AI answers user questions and generates encyclopedia-style articles strictly based on the teachings of the Lubavitcher Rebbe regarding security for the Land of Israel."
+    "This AI answers questions and generates encyclopedia-style articles based only on authentic source material — including your uploaded documents and site content."
 )
 
 # ------------------------------
@@ -24,11 +40,8 @@ st.markdown(
 if "OPENAI_API_KEY" not in st.secrets:
     st.error(
         "OpenAI API key not found.\n\n"
-        "You are using Streamlit Cloud. You must add your API key in **Secrets**.\n\n"
-        "Steps:\n"
-        "1. Click ⚙️ Settings\n"
-        "2. Click Secrets\n"
-        "3. Add:\n"
+        "You are using Streamlit Cloud. Add your key in **Settings → Secrets**.\n\n"
+        "Add a line like:\n"
         "OPENAI_API_KEY = sk-..."
     )
     st.stop()
@@ -36,77 +49,130 @@ if "OPENAI_API_KEY" not in st.secrets:
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ------------------------------
-# Multi-Topic Knowledge Base
+# SESSION STORAGE
 # ------------------------------
-topics = [
-    "Preemptive Defense",
-    "Ownership of Israel",
-    "The 329 Paradigm"
-]
-
-# Store generated articles
 if 'articles' not in st.session_state:
     st.session_state['articles'] = {}
 
+if 'library_texts' not in st.session_state:
+    st.session_state['library_texts'] = []  # Holds text extracted from uploaded docs
+
 # ------------------------------
-# User Question Input
+# FILE UPLOAD SECTION (YOUR GOOGLE DRIVE MATERIAL)
+# ------------------------------
+st.subheader("Upload Source Documents (DOCX, PDF, TXT)")
+
+uploaded_files = st.file_uploader(
+    "Upload letters, talks, essays — the AI will learn from them.",
+    accept_multiple_files=True,
+    type=["docx", "pdf", "txt"],
+)
+
+
+def extract_text_from_file(f):
+    """Return plain text from supported file types."""
+    name = f.name.lower()
+
+    # DOCX
+    if name.endswith(".docx") and docx is not None:
+        doc = docx.Document(f)
+        return "\n".join(p.text for p in doc.paragraphs)
+
+    # PDF
+    if name.endswith(".pdf") and PyPDF2 is not None:
+        reader = PyPDF2.PdfReader(f)
+        pages = []
+        for p in reader.pages:
+            try:
+                pages.append(p.extract_text() or "")
+            except Exception:
+                pages.append("")
+        return "\n".join(pages)
+
+    # TXT (fallback)
+    if name.endswith(".txt"):
+        return f.read().decode("utf-8", errors="ignore")
+
+    return ""  # unsupported or failed
+
+
+if uploaded_files:
+    added = 0
+    for f in uploaded_files:
+        text = extract_text_from_file(f)
+        if text.strip():
+            st.session_state['library_texts'].append(text)
+            added += 1
+    st.success(f"Added {added} document(s) to the knowledge library.")
+
+# Show library status
+if st.session_state['library_texts']:
+    st.info(f"Knowledge library contains {len(st.session_state['library_texts'])} document(s). Yiddish is supported — the AI will understand it.")
+
+# ------------------------------
+# QUESTION INPUT
 # ------------------------------
 user_question = st.text_area(
-    "Ask a question or request an article:",
-    height=150,
-    placeholder="e.g., What did the Rebbe say about preemptive defense?"
+    "Ask anything (the AI answers only from your sources):",
+    height=140,
+    placeholder="e.g., What did the Rebbe say about preemptive defense?",
 )
 
 # ------------------------------
-# AI Function: Answer Questions or Generate Articles
+# AI FUNCTION (USES ARTICLES + UPLOADED DOCUMENTS)
 # ------------------------------
+
 def answer_question_or_generate_article(question: str) -> str:
-    # Collect context from previously generated articles
-    knowledge_context = "\n\n".join(st.session_state['articles'].values())
+    # Merge previously generated content
+    article_context = "\n\n".join(st.session_state['articles'].values())
+
+    # Merge uploaded documents
+    library_context = "\n\n".join(st.session_state['library_texts'])
 
     prompt = (
-        f"You are an AI Grokpedia assistant. Answer the user's question or generate an encyclopedia-style article.\n"
-        f"Use ONLY the knowledge from the Lubavitcher Rebbe's teachings and any previously generated articles provided.\n"
-        f"Structure the answer clearly and include sections if appropriate (Overview, Core Principles, Halachic Foundation, Security Implications, Conclusion).\n"
-        f"Cite sources or previously generated material when relevant.\n\n"
-        f"Knowledge context: {knowledge_context}\n"
-        f"User question: {question}"
+        "You are an AI Grokpedia assistant. Answer ONLY using the material provided.\n"
+        "If a clear source is not present in the context, say you don't have enough information.\n"
+        "Prefer accuracy over speculation.\n\n"
+        "Write answers in a structured way when helpful (Overview, Principles, Halachic Basis, Implications, Conclusion).\n"
+        "Quote or summarize specific lines when possible, and reference which document or idea it comes from.\n\n"
+        f"=== CONTEXT: PREVIOUS ARTICLES ===\n{article_context}\n\n"
+        f"=== CONTEXT: UPLOADED DOCUMENTS ===\n{library_context}\n\n"
+        f"=== USER QUESTION ===\n{question}"
     )
 
     response = client.chat.completions.create(
         model="gpt-4.1",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
+        temperature=0.1,
     )
 
     return response.choices[0].message.content
 
 # ------------------------------
-# Submit Button
+# SUBMIT
 # ------------------------------
 if st.button("Ask"):
     if not user_question.strip():
-        st.warning("Please enter a question or request.")
+        st.warning("Please enter a question.")
     else:
-        with st.spinner("Generating answer/article..."):
+        with st.spinner("Thinking..."):
             try:
                 answer = answer_question_or_generate_article(user_question.strip())
-                st.subheader("Answer / Article")
+                st.subheader("Answer")
                 st.write(answer)
 
-                # Optionally store article if it appears encyclopedic
+                # Save to article history
                 st.session_state['articles'][user_question] = answer
-
             except Exception as e:
                 st.error(f"Error generating answer/article: {e}")
 
 # ------------------------------
-# Display Previously Generated Articles
+# HISTORY
 # ------------------------------
 if st.session_state['articles']:
     st.markdown("---")
-    st.subheader("Previously generated articles / answers")
+    st.subheader("History of questions & answers")
     for q, a in st.session_state['articles'].items():
-        st.markdown(f"**Request / Question:** {q}")
+        st.markdown(f"**Question:** {q}")
         st.write(a)
         st.markdown("---")
