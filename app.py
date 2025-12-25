@@ -6,8 +6,6 @@ import os
 # ------------------------------
 # OPENAI CLIENT SETUP
 # ------------------------------
-# Make sure to set your API key in Streamlit secrets or environment variables
-# Example in Streamlit Cloud: Settings > Secrets > OPENAI_API_KEY="your_api_key_here"
 api_key = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=api_key)
 
@@ -34,8 +32,8 @@ if uploaded_files:
         else:
             text = ""
 
-        # Break text into smaller chunks
-        chunk_size = 300
+        # Break text into smaller chunks (smaller size helps AI find relevant content)
+        chunk_size = 150
         overlap = 50
         words = text.split()
         i = 0
@@ -59,16 +57,14 @@ def answer_question_or_generate_article(question: str) -> str:
         article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
         st.write(f"Debug: article_context length = {len(article_context)}")
 
-        # Pull ONLY relevant passages from uploaded documents
+        # Pull relevant passages from uploaded documents
         results = st.session_state.get('library_chunks', [])
         if len(results) == 0:
             st.warning("No documents uploaded. Please upload files to generate answers.")
             return ""
 
-        # Use only first 3 chunks to prevent too large prompts
-        max_chunks = 3
-        selected_chunks = results[:max_chunks]
-        library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in selected_chunks])
+        # Use all chunks to maximize context coverage (for English + Yiddish)
+        library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in results])
         st.write(f"Debug: library_context length = {len(library_context)}")
 
         # Prepare the prompt for the AI
@@ -77,6 +73,8 @@ You are an AI Grokpedia assistant.
 Answer ONLY using the material provided below.
 If a clear source is not present in the context, say that you don't have enough information.
 Prefer accuracy over speculation.
+
+Always search for both English and Yiddish content and use translations where needed.
 
 When helpful, organize answers with sections like:
 - Overview
