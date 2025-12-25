@@ -6,6 +6,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2 import service_account
 import io
+import json
 
 # ------------------------------
 # OPENAI CLIENT SETUP
@@ -17,19 +18,20 @@ st.title("Rebbe Security Encyclopedia")
 st.write("Ask any question about the Rebbe's teachings on security for Israel.")
 
 # ------------------------------
-# GOOGLE DRIVE INTEGRATION
+# GOOGLE DRIVE INTEGRATION USING STREAMLIT SECRETS
 # ------------------------------
 st.subheader("Load documents from Google Drive")
 
-# Set path to your service account credentials JSON (add to Streamlit secrets or upload)
-SERVICE_ACCOUNT_FILE = 'service_account.json'
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+# Read the service account JSON from Streamlit secrets
+service_account_info = json.loads(st.secrets["google"]["service_account_json"])
+credentials = service_account.Credentials.from_service_account_info(
+    service_account_info, scopes=SCOPES
+)
 service = build('drive', 'v3', credentials=credentials)
 
-# Specify your folder ID
+# Input folder ID
 FOLDER_ID = st.text_input("Enter Google Drive Folder ID:")
 
 if FOLDER_ID:
@@ -58,7 +60,7 @@ if FOLDER_ID:
             else:
                 text = ""
 
-            # Break text into chunks
+            # Break text into chunks for AI
             chunk_size = 150
             overlap = 50
             words = text.split()
@@ -73,7 +75,7 @@ if FOLDER_ID:
         st.warning("No documents found in this folder.")
 
 # ------------------------------
-# AI FUNCTION AND USER UI (unchanged from previous version)
+# AI FUNCTION AND USER UI
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
