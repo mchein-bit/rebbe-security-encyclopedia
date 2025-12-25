@@ -27,6 +27,8 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 # Read the service account JSON from Streamlit secrets safely
 try:
     service_account_json_str = st.secrets["google"]["service_account_json"]
+    # Replace literal newlines with escaped newlines
+    service_account_json_str = service_account_json_str.replace('\\n', '\\n')
     service_account_info = json.loads(service_account_json_str)
     credentials = service_account.Credentials.from_service_account_info(
         service_account_info, scopes=SCOPES
