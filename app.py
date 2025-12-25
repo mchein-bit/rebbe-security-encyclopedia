@@ -1,17 +1,21 @@
 # ------------------------------
-# AI FUNCTION (USES SEARCHED CONTEXT ONLY)
+# AI FUNCTION (USES SEARCHED CONTEXT ONLY) WITH DEBUGGING
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
-    '''Answer questions using searched context + prior articles.'''
+    '''Answer questions using searched context + prior articles with debug messages.''' 
 
     try:
+        st.write("Debug: Starting answer generation")
+
         # Merge previously generated content safely
         article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
+        st.write(f"Debug: article_context length = {len(article_context)}")
 
         # Pull ONLY the relevant passages from uploaded docs
         results = search_library(question)
         library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in results])
+        st.write(f"Debug: library_context length = {len(library_context)}")
 
         # Multiline prompt using triple quotes
         prompt = f'''
@@ -39,12 +43,15 @@ Quote or summarize specific passages and name the document when possible.
 {question}
 '''
 
+        st.write("Debug: Prompt created")
+
         response = client.chat.completions.create(
             model="gpt-4.1",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.15,
         )
 
+        st.write("Debug: Response received")
         return response.choices[0].message.content
 
     except Exception as e:
