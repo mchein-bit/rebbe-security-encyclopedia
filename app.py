@@ -1,5 +1,15 @@
 import streamlit as st
 import docx
+from openai import OpenAI
+import os
+
+# ------------------------------
+# OPENAI CLIENT SETUP
+# ------------------------------
+# Make sure to set your API key in Streamlit secrets or environment variables
+# Example in Streamlit Cloud: Settings > Secrets > OPENAI_API_KEY="your_api_key_here"
+api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=api_key)
 
 st.title("Rebbe Security Encyclopedia")
 st.write("Ask any question about the Rebbe's teachings on security for Israel.")
@@ -24,8 +34,8 @@ if uploaded_files:
         else:
             text = ""
 
-        # Break text into smaller chunks to avoid too large prompts
-        chunk_size = 300  # smaller chunks to prevent prompt size issues
+        # Break text into smaller chunks
+        chunk_size = 300
         overlap = 50
         words = text.split()
         i = 0
@@ -55,7 +65,7 @@ def answer_question_or_generate_article(question: str) -> str:
             st.warning("No documents uploaded. Please upload files to generate answers.")
             return ""
 
-        # Use only first 3 chunks to prevent too large prompts (adjust as needed)
+        # Use only first 3 chunks to prevent too large prompts
         max_chunks = 3
         selected_chunks = results[:max_chunks]
         library_context = "\n\n".join(["[From {}]\n{}".format(r['source'], r['text']) for r in selected_chunks])
@@ -89,15 +99,18 @@ Quote or summarize specific passages and name the document when possible.
 
         st.write("Debug: Prompt created")
 
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-
-        st.write("Debug: Response received")
-        return response.choices[0].message.content
+        # Call OpenAI API with error handling
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4.1",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.15,
+            )
+            st.write("Debug: Response received")
+            return response.choices[0].message.content
+        except Exception as e:
+            st.error(f"OpenAI API error: {e}")
+            return ""
 
     except Exception as e:
         st.error(f"Error in generating answer: {e}")
