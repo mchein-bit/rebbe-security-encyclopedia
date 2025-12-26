@@ -7,6 +7,7 @@ from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2 import service_account
 import io
 import json
+import pickle
 
 # ------------------------------
 # OPENAI CLIENT SETUP
@@ -24,7 +25,6 @@ st.subheader("Load documents from Google Drive")
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 
-# Read the service account JSON from Streamlit secrets safely
 try:
     service_account_json_str = st.secrets["google"]["service_account_json"]
     service_account_info = json.loads(service_account_json_str)
@@ -36,36 +36,33 @@ except Exception as e:
     st.error(f"Google Drive authentication failed. Check that your JSON in secrets is valid: {e}")
     st.stop()
 
-# Input multiple folder IDs (we now support sub‑folders and more file types)
 folder_ids_input = st.text_area("Enter Google Drive Folder IDs (one per line):")
 folder_ids = [f.strip() for f in folder_ids_input.splitlines() if f.strip()]
 
-# Helper: download text from many file types
+# ------------------------------
+# HELPER FUNCTIONS
+# ------------------------------
 
 def _extract_text_from_drive_file(file_meta):
     file_id = file_meta["id"]
     mime = file_meta["mimeType"]
 
-    # Google Docs — export as .txt
     if mime == "application/vnd.google-apps.document":
         request = service.files().export_media(fileId=file_id, mimeType="text/plain")
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-        fh.seek(0)
+    else:
+        request = service.files().get_media(fileId=file_id)
+
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        _, done = downloader.next_chunk()
+    fh.seek(0)
+
+    if mime == "application/vnd.google-apps.document" or mime == "text/plain":
         return fh.read().decode("utf-8")
 
-    # PDFs — download then extract plain text (simple fallback)
     if mime == "application/pdf":
-        request = service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
-        done = False
-        while not done:
-            status, done = downloader.next_chunk()
-        fh.seek(0)
         try:
             import PyPDF2
             reader = PyPDF2.PdfReader(fh)
@@ -73,20 +70,7 @@ def _extract_text_from_drive_file(file_meta):
         except Exception:
             return ""
 
-    # Plain text
-    if mime == "text/plain":
-        request = service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        MediaIoBaseDownload(fh, request).next_chunk()
-        fh.seek(0)
-        return fh.read().decode("utf-8")
-
-    # DOCX
     if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        request = service.files().get_media(fileId=file_id)
-        fh = io.BytesIO()
-        MediaIoBaseDownload(fh, request).next_chunk()
-        fh.seek(0)
         document = docx.Document(fh)
         return "\n".join([p.text for p in document.paragraphs])
 
@@ -105,17 +89,12 @@ def load_folder_recursive(folder_id, added_counter):
         ).execute()
         items = results.get("files", [])
 
-        st.write(f"Debug: items in folder {folder_id}:", items)
-
         for item in items:
             mime = item["mimeType"]
-
-            # Folder → recurse
             if mime == "application/vnd.google-apps.folder":
                 load_folder_recursive(item["id"], added_counter)
                 continue
 
-            # Supported file types → extract text
             if mime in [
                 "text/plain",
                 "application/pdf",
@@ -124,8 +103,9 @@ def load_folder_recursive(folder_id, added_counter):
             ]:
                 text = _extract_text_from_drive_file(item)
                 if text:
-                    chunk_size = 150
-                    overlap = 50
+                    # Reduce chunk size further to reduce tokens per request
+                    chunk_size = 50
+                    overlap = 15
                     words = text.split()
                     i = 0
                     while i < len(words):
@@ -139,10 +119,16 @@ def load_folder_recursive(folder_id, added_counter):
     except Exception as e:
         st.error(f"Error loading files from folder {folder_id}: {e}")
 
-if folder_ids:
-    if 'library_chunks' not in st.session_state:
+# Load library from disk if available
+if 'library_chunks' not in st.session_state:
+    try:
+        with open("library_chunks.pkl", "rb") as f:
+            st.session_state['library_chunks'] = pickle.load(f)
+        st.success("Loaded document library from disk.")
+    except FileNotFoundError:
         st.session_state['library_chunks'] = []
 
+if folder_ids:
     for FOLDER_ID in folder_ids:
         added = [0]
         load_folder_recursive(FOLDER_ID, added)
@@ -150,6 +136,9 @@ if folder_ids:
             st.success(f"Added {added[0]} file(s) (including sub‑folders) from folder {FOLDER_ID}.")
         else:
             st.warning(f"No supported documents found in folder {FOLDER_ID}. Make sure the service account has access and the files are real (not shortcuts).")
+    # Save library to disk so it doesn't need to reload each time
+    with open("library_chunks.pkl", "wb") as f:
+        pickle.dump(st.session_state['library_chunks'], f)
 
 # ------------------------------
 # AI FUNCTION AND USER UI
@@ -162,7 +151,11 @@ def answer_question_or_generate_article(question: str) -> str:
     if len(results) == 0:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
-    library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in results])
+
+    # Limit number of chunks to reduce prompt size and tokens
+    max_chunks = 10  # Reduce further for large libraries
+    selected_chunks = results[:max_chunks]
+    library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in selected_chunks])
 
     prompt = f'''
 You are an AI Grokpedia assistant.
