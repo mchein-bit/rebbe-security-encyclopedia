@@ -103,9 +103,9 @@ def load_folder_recursive(folder_id, added_counter):
             ]:
                 text = _extract_text_from_drive_file(item)
                 if text:
-                    # Reduce chunk size further to reduce tokens per request
-                    chunk_size = 50
-                    overlap = 15
+                    # Further reduce chunk size and overlap to limit tokens
+                    chunk_size = 30
+                    overlap = 10
                     words = text.split()
                     i = 0
                     while i < len(words):
@@ -136,7 +136,7 @@ if folder_ids:
             st.success(f"Added {added[0]} file(s) (including sub‑folders) from folder {FOLDER_ID}.")
         else:
             st.warning(f"No supported documents found in folder {FOLDER_ID}. Make sure the service account has access and the files are real (not shortcuts).")
-    # Save library to disk so it doesn't need to reload each time
+    # Save library to disk
     with open("library_chunks.pkl", "wb") as f:
         pickle.dump(st.session_state['library_chunks'], f)
 
@@ -152,8 +152,8 @@ def answer_question_or_generate_article(question: str) -> str:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
 
-    # Limit number of chunks to reduce prompt size and tokens
-    max_chunks = 10  # Reduce further for large libraries
+    # Take only the first 5 chunks to reduce prompt size
+    max_chunks = 5
     selected_chunks = results[:max_chunks]
     library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in selected_chunks])
 
