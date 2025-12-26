@@ -36,60 +36,126 @@ except Exception as e:
     st.error(f"Google Drive authentication failed. Check that your JSON in secrets is valid: {e}")
     st.stop()
 
-# Input multiple folder IDs
+# Input multiple folder IDs (we now support sub‑folders and more file types)
 folder_ids_input = st.text_area("Enter Google Drive Folder IDs (one per line):")
 folder_ids = [f.strip() for f in folder_ids_input.splitlines() if f.strip()]
 
-if folder_ids:
-    if 'library_chunks' not in st.session_state:
-        st.session_state['library_chunks'] = []
+# Helper: download text from many file types
 
-    for FOLDER_ID in folder_ids:
+def _extract_text_from_drive_file(file_meta):
+    file_id = file_meta["id"]
+    mime = file_meta["mimeType"]
+
+    # Google Docs — export as .txt
+    if mime == "application/vnd.google-apps.document":
+        request = service.files().export_media(fileId=file_id, mimeType="text/plain")
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
+        return fh.read().decode("utf-8")
+
+    # PDFs — download then extract plain text (simple fallback)
+    if mime == "application/pdf":
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            status, done = downloader.next_chunk()
+        fh.seek(0)
         try:
-            query = f"'{FOLDER_ID}' in parents and (mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')"
-            results = service.files().list(q=query, pageSize=100, fields="files(id, name, mimeType)").execute()
-            files = results.get('files', [])
+            import PyPDF2
+            reader = PyPDF2.PdfReader(fh)
+            return "\n".join([page.extract_text() or "" for page in reader.pages])
+        except Exception:
+            return ""
 
-            if files:
-                for file in files:
-                    request = service.files().get_media(fileId=file['id'])
-                    fh = io.BytesIO()
-                    downloader = MediaIoBaseDownload(fh, request)
-                    done = False
-                    while not done:
-                        status, done = downloader.next_chunk()
-                    fh.seek(0)
+    # Plain text
+    if mime == "text/plain":
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        MediaIoBaseDownload(fh, request).next_chunk()
+        fh.seek(0)
+        return fh.read().decode("utf-8")
 
-                    if file['mimeType'] == 'text/plain':
-                        text = fh.read().decode('utf-8')
-                    elif file['mimeType'] == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                        doc = docx.Document(fh)
-                        text = "\n".join([p.text for p in doc.paragraphs])
-                    else:
-                        text = ""
+    # DOCX
+    if mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        request = service.files().get_media(fileId=file_id)
+        fh = io.BytesIO()
+        MediaIoBaseDownload(fh, request).next_chunk()
+        fh.seek(0)
+        document = docx.Document(fh)
+        return "\n".join([p.text for p in document.paragraphs])
 
-                    # Break text into chunks for AI
+    return ""
+
+# Recursively walk folders
+
+def load_folder_recursive(folder_id, added_counter):
+    try:
+        results = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            pageSize=1000,
+            fields="files(id, name, mimeType)",
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True
+        ).execute()
+        items = results.get("files", [])
+
+        st.write(f"Debug: items in folder {folder_id}:", items)
+
+        for item in items:
+            mime = item["mimeType"]
+
+            # Folder → recurse
+            if mime == "application/vnd.google-apps.folder":
+                load_folder_recursive(item["id"], added_counter)
+                continue
+
+            # Supported file types → extract text
+            if mime in [
+                "text/plain",
+                "application/pdf",
+                "application/vnd.google-apps.document",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ]:
+                text = _extract_text_from_drive_file(item)
+                if text:
                     chunk_size = 150
                     overlap = 50
                     words = text.split()
                     i = 0
                     while i < len(words):
                         chunk = " ".join(words[i:i+chunk_size])
-                        st.session_state['library_chunks'].append({"source": file['name'], "text": chunk})
+                        st.session_state['library_chunks'].append({
+                            "source": item['name'],
+                            "text": chunk
+                        })
                         i += chunk_size - overlap
+                    added_counter[0] += 1
+    except Exception as e:
+        st.error(f"Error loading files from folder {folder_id}: {e}")
 
-                st.success(f"Added {len(files)} file(s) from folder {FOLDER_ID} to the knowledge library.")
-            else:
-                st.warning(f"No documents found in folder {FOLDER_ID}.")
-        except Exception as e:
-            st.error(f"Error loading files from folder {FOLDER_ID}: {e}")
+if folder_ids:
+    if 'library_chunks' not in st.session_state:
+        st.session_state['library_chunks'] = []
+
+    for FOLDER_ID in folder_ids:
+        added = [0]
+        load_folder_recursive(FOLDER_ID, added)
+        if added[0] > 0:
+            st.success(f"Added {added[0]} file(s) (including sub‑folders) from folder {FOLDER_ID}.")
+        else:
+            st.warning(f"No supported documents found in folder {FOLDER_ID}. Make sure the service account has access and the files are real (not shortcuts).")
 
 # ------------------------------
 # AI FUNCTION AND USER UI
 # ------------------------------
 
 def answer_question_or_generate_article(question: str) -> str:
-    '''Answer questions using uploaded documents and prior articles.''' 
     st.write("Debug: AI function called")
     article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
     results = st.session_state.get('library_chunks', [])
