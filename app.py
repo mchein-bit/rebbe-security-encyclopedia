@@ -43,6 +43,47 @@ folder_ids = [f.strip() for f in folder_ids_input.splitlines() if f.strip()]
 # HELPER FUNCTIONS
 # ------------------------------
 
+# --- STEP 3A: EMBEDDING INDEX (store searchable vectors) ---
+# We will build this gradually. For now, we only define helper functions.
+
+def _get_embedding(text: str):
+    """Return OpenAI embedding vector for a chunk of text."""
+    try:
+        resp = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=text
+        )
+        return resp.data[0].embedding
+    except Exception:
+        return None
+
+
+def _cosine_similarity(a, b):
+    """Compute cosine similarity between two vectors (pure python)."""
+    if not a or not b:
+        return 0
+    dot = sum(x*y for x, y in zip(a, b))
+    norm_a = sum(x*x for x in a) ** 0.5
+    norm_b = sum(x*x for x in b) ** 0.5
+    if norm_a == 0 or norm_b == 0:
+        return 0
+    return dot / (norm_a * norm_b)
+
+
+def build_embeddings_index():
+    """Create embeddings for every chunk and cache them on disk."""
+    st.info("Building embeddings index (first time may take a while)...")
+    vectors = []
+    for ch in st.session_state.get('library_chunks', []):
+        vec = _get_embedding(ch["text"])
+        vectors.append(vec)
+    st.session_state['embeddings'] = vectors
+    # persist to disk
+    with open("embeddings.pkl", "wb") as f:
+        pickle.dump(vectors, f)
+    st.success("Embedding index created and saved.")
+
+
 def _extract_text_from_drive_file(file_meta):
     file_id = file_meta["id"]
     mime = file_meta["mimeType"]
@@ -120,6 +161,7 @@ def load_folder_recursive(folder_id, added_counter):
         st.error(f"Error loading files from folder {folder_id}: {e}")
 
 # Load library from disk if available
+# (and later we will pair it with an embeddings index)
 if 'library_chunks' not in st.session_state:
     try:
         with open("library_chunks.pkl", "rb") as f:
@@ -127,6 +169,15 @@ if 'library_chunks' not in st.session_state:
         st.success("Loaded document library from disk.")
     except FileNotFoundError:
         st.session_state['library_chunks'] = []
+
+# Try loading embeddings index (optional at this stage)
+if 'embeddings' not in st.session_state:
+    try:
+        with open("embeddings.pkl", "rb") as f:
+            st.session_state['embeddings'] = pickle.load(f)
+        st.info("Loaded existing embeddings index.")
+    except FileNotFoundError:
+        st.session_state['embeddings'] = []
 
 if folder_ids:
     for FOLDER_ID in folder_ids:
@@ -139,6 +190,11 @@ if folder_ids:
     # Save library to disk
     with open("library_chunks.pkl", "wb") as f:
         pickle.dump(st.session_state['library_chunks'], f)
+
+    # If library changed, prompt user to build an embeddings index
+    if len(st.session_state.get('embeddings', [])) != len(st.session_state.get('library_chunks', [])):
+        if st.button("Build / Rebuild Search Index"):
+            build_embeddings_index()
 
 # ------------------------------
 # AI FUNCTION AND USER UI
