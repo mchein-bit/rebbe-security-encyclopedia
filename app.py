@@ -84,6 +84,26 @@ def build_embeddings_index():
     st.success("Embedding index created and saved.")
 
 
+# --- STEP 3B: SEARCH THE EMBEDDINGS INDEX ---
+# Given a question, we compute its embedding and return the best‑matching chunks.
+
+def search_chunks(query: str, top_k: int = 8):
+    if not st.session_state.get("embeddings"):
+        return []
+
+    q_vec = _get_embedding(query)
+    if not q_vec:
+        return []
+
+    scored = []
+    for chunk, vec in zip(st.session_state.get("library_chunks", []), st.session_state.get("embeddings", [])):
+        if vec:
+            scored.append(( _cosine_similarity(q_vec, vec), chunk))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [c for _, c in scored[:top_k]]
+
+
 def _extract_text_from_drive_file(file_meta):
     file_id = file_meta["id"]
     mime = file_meta["mimeType"]
@@ -208,10 +228,13 @@ def answer_question_or_generate_article(question: str) -> str:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
 
-    # Take only the first 5 chunks to reduce prompt size
-    max_chunks = 5
-    selected_chunks = results[:max_chunks]
-    library_context = "\n\n".join([f"[From {r['source']}]\n{r['text']}" for r in selected_chunks])
+    # Instead of taking the first few chunks blindly,
+    # we now SEARCH for the most relevant ones using our embeddings index.
+    selected_chunks = search_chunks(question, top_k=10)
+
+    library_context = "\n\n".join(
+    [f"[From {r['source']}]\n{r['text']}" for r in selected_chunks]
+)
 
     prompt = f'''
 You are an AI Grokpedia assistant.
