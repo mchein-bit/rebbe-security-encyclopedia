@@ -222,19 +222,28 @@ if folder_ids:
 
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
+
+    # Gather previously generated articles (if any)
     article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
+
+    # Safety check — make sure we actually have a library
     results = st.session_state.get('library_chunks', [])
     if len(results) == 0:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
 
-    # Instead of taking the first few chunks blindly,
-    # we now SEARCH for the most relevant ones using our embeddings index.
-    selected_chunks = search_chunks(question, top_k=10)
+    # 🔎 Use the SEARCH index — NOT random chunks
+    selected_chunks = search_chunks(question, top_k=12)
 
+    # --- DEBUG INFO (so we know what the search is doing) ---
+    st.write(f"DEBUG — search returned {len(selected_chunks)} results")
+
+    # Build the context text cleanly
     library_context = "\n\n".join(
-    [f"[From {r['source']}]\n{r['text']}" for r in selected_chunks]
-)
+        [f"[From {r['source']}]\n{r['text']}" for r in selected_chunks]
+    )
+
+    st.write(f"DEBUG — library_context length = {len(library_context)}")
 
     prompt = f'''
 You are an AI Grokpedia assistant.
@@ -262,6 +271,7 @@ Quote or summarize specific passages and name the document when possible.
 === USER QUESTION ===
 {question}
 '''
+
     try:
         response = client.chat.completions.create(
             model="gpt-4.1",
@@ -273,7 +283,7 @@ Quote or summarize specific passages and name the document when possible.
         st.error(f"OpenAI API error: {e}")
         return ""
 
-question = st.text_input("Type your question here:")
+question = st.text_input("Type your question here:")("Type your question here:")
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
