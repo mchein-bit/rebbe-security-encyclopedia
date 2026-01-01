@@ -283,7 +283,7 @@ Quote or summarize specific passages and name the document when possible.
         st.error(f"OpenAI API error: {e}")
         return ""
 
-question = st.text_input("Type your question here:")("Type your question here:")
+question = st.text_input("Type your question here:")
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
