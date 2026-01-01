@@ -234,26 +234,34 @@ def answer_question_or_generate_article(question: str) -> str:
         st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
 
-    # 🔎 Use the SEARCH index — NOT random chunks
+    # 🔎 Use the SEARCH index
     selected_chunks = search_chunks(question, top_k=12)
-
-    # --- DEBUG INFO (so we know what the search is doing) ---
     st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
 
-# If vector search found nothing, fall back to keyword search
-if len(selected_chunks) == 0:
-    st.info("Nothing found in vector search — using keyword fallback (still only from your documents).")
-    selected_chunks = keyword_fallback_search(question, max_hits=12)
+    # --- fallback: simple keyword search ---
+    def keyword_fallback_search(q: str, max_hits: int = 12):
+        q_low = q.lower()
+        hits = []
+        for ch in st.session_state.get('library_chunks', []):
+            if q_low in ch['text'].lower():
+                hits.append(ch)
+                if len(hits) >= max_hits:
+                    break
+        return hits
 
-st.write(f"DEBUG — FINAL selected results = {len(selected_chunks)}")
+    if len(selected_chunks) == 0:
+        st.info("Nothing found in vector search — using keyword fallback (documents only).")
+        selected_chunks = keyword_fallback_search(question, max_hits=12)
 
-    # Build the context text cleanly
+    st.write(f"DEBUG — FINAL selected results = {len(selected_chunks)}")
+
+    # Build the context
     library_context = "
 
-".join(
-        [f"[From {r['source']}]
-{r['text']}" for r in selected_chunks]
-    )
+".join([
+        f"[From {r['source']}]
+{r['text']}" for r in selected_chunks
+    ])
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
@@ -295,7 +303,7 @@ Quote or summarize specific passages and name the document when possible.
         st.error(f"OpenAI API error: {e}")
         return ""
 
-question = st.text_input("Type your question here:")
+question = st.text_input("Type your question here:")("Type your question here:")
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
