@@ -224,7 +224,9 @@ def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
     # Gather previously generated articles (if any)
-    article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
+    article_context = "
+
+".join([str(a) for a in st.session_state.get('articles', {}).values()])
 
     # Safety check — make sure we actually have a library
     results = st.session_state.get('library_chunks', [])
@@ -239,8 +241,11 @@ def answer_question_or_generate_article(question: str) -> str:
     st.write(f"DEBUG — search returned {len(selected_chunks)} results")
 
     # Build the context text cleanly
-    library_context = "\n\n".join(
-        [f"[From {r['source']}]\n{r['text']}" for r in selected_chunks]
+    library_context = "
+
+".join(
+        [f"[From {r['source']}]
+{r['text']}" for r in selected_chunks]
     )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
