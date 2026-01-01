@@ -238,7 +238,14 @@ def answer_question_or_generate_article(question: str) -> str:
     selected_chunks = search_chunks(question, top_k=12)
 
     # --- DEBUG INFO (so we know what the search is doing) ---
-    st.write(f"DEBUG — search returned {len(selected_chunks)} results")
+    st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
+
+# If vector search found nothing, fall back to keyword search
+if len(selected_chunks) == 0:
+    st.info("Nothing found in vector search — using keyword fallback (still only from your documents).")
+    selected_chunks = keyword_fallback_search(question, max_hits=12)
+
+st.write(f"DEBUG — FINAL selected results = {len(selected_chunks)}")
 
     # Build the context text cleanly
     library_context = "
