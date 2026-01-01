@@ -224,7 +224,7 @@ def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
     # Gather previously generated articles (if any)
-    article_context = "
+    article_context = 
 
 ".join([str(a) for a in st.session_state.get('articles', {}).values()])
 
