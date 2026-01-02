@@ -224,7 +224,7 @@ def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
     # Gather previously generated articles (if any)
-   " article_context = "
+    article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
 
 ".join([str(a) for a in st.session_state.get('articles', {}).values()]) "
 
@@ -256,7 +256,10 @@ def answer_question_or_generate_article(question: str) -> str:
     st.write(f"DEBUG — FINAL selected results = {len(selected_chunks)}")
 
     # Build the context
-    library_context = "
+    library_context = "\n\n".join([
+    f"[From {r['source']}] \n{r['text']}"
+    for r in selected_chunks
+])
 
 ".join([
         f"[From {r['source']}]
@@ -303,7 +306,7 @@ Quote or summarize specific passages and name the document when possible.
         st.error(f"OpenAI API error: {e}")
         return ""
 
-question = st.text_input("Type your question here:")("Type your question here:")
+question = st.text_input("Type your question here:")
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
