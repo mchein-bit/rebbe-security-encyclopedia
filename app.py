@@ -223,77 +223,47 @@ if folder_ids:
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
-    # Gather previously generated articles (if any)
-    article_context = "\n\n".join([str(a) for a in st.session_state.get('articles', {}).values()])
+    # No article generation yet — keep empty and safe
+    article_context = ""
 
-".join([str(a) for a in st.session_state.get('articles', {}).values()]) "
-
-    # Safety check — make sure we actually have a library
-    results = st.session_state.get('library_chunks', [])
-    if len(results) == 0:
-    st.warning("No documents uploaded. Please upload files to generate answers.")
+    # Make sure we actually have documents
+    if not st.session_state.get("library_chunks"):
+        st.warning("No documents available.")
         return ""
 
-    # 🔎 Use the SEARCH index
+    # Vector search
     selected_chunks = search_chunks(question, top_k=12)
     st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
 
-    # --- fallback: simple keyword search ---
-    def keyword_fallback_search(q: str, max_hits: int = 12):
-        q_low = q.lower()
-        hits = []
-        for ch in st.session_state.get('library_chunks', []):
-            if q_low in ch['text'].lower():
-                hits.append(ch)
-                if len(hits) >= max_hits:
-                    break
-        return hits
+    # Keyword fallback if vector search fails
+    if not selected_chunks:
+        q_low = question.lower()
+        selected_chunks = [
+            ch for ch in st.session_state["library_chunks"]
+            if q_low in ch["text"].lower()
+        ][:12]
+        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    if len(selected_chunks) == 0:
-        st.info("Nothing found in vector search — using keyword fallback (documents only).")
-        selected_chunks = keyword_fallback_search(question, max_hits=12)
-
-    st.write(f"DEBUG — FINAL selected results = {len(selected_chunks)}")
-
-    # Build the context
-    library_context = "\n\n".join([
-    f"[From {r['source']}] \n{r['text']}"
-    for r in selected_chunks
-])
-
-".join([
-        f"[From {r['source']}]
-{r['text']}" for r in selected_chunks
-    ])
+    # Build library context SAFELY
+    library_context = "\n\n".join(
+        f"[From {ch['source']}]\n{ch['text']}"
+        for ch in selected_chunks
+    )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
-    prompt = f'''
-You are an AI Grokpedia assistant.
-Answer ONLY using the material provided below.
-If a clear source is not present in the context, say that you don't have enough information.
-Prefer accuracy over speculation.
+    prompt = f"""
+You are a scholarly Grokpedia-style assistant.
 
-Always search for both English and Yiddish content and use translations where needed.
+Answer ONLY using the provided sources.
+If the sources do not clearly answer the question, say so.
 
-When helpful, organize answers with sections like:
-- Overview
-- Principles
-- Halachic Basis
-- Implications
-- Conclusion
-
-Quote or summarize specific passages and name the document when possible.
-
-=== CONTEXT: PREVIOUS ARTICLES ===
-{article_context}
-
-=== CONTEXT: RELEVANT SOURCES (SEARCHED) ===
+=== SOURCES ===
 {library_context}
 
-=== USER QUESTION ===
+=== QUESTION ===
 {question}
-'''
+"""
 
     try:
         response = client.chat.completions.create(
@@ -306,8 +276,14 @@ Quote or summarize specific passages and name the document when possible.
         st.error(f"OpenAI API error: {e}")
         return ""
 
+
+# ------------------------------
+# USER INPUT
+# ------------------------------
 question = st.text_input("Type your question here:")
+
 if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
     st.write(answer)
+
