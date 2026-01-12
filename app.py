@@ -231,7 +231,7 @@ def answer_question_or_generate_article(question: str) -> str:
     # Safety check — make sure we actually have a library
     results = st.session_state.get('library_chunks', [])
     if len(results) == 0:
-        st.warning("No documents uploaded. Please upload files to generate answers.")
+    st.warning("No documents uploaded. Please upload files to generate answers.")
         return ""
 
     # 🔎 Use the SEARCH index
