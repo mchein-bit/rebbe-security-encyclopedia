@@ -256,9 +256,9 @@ def answer_question_or_generate_article(question: str) -> str:
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
         # Build context safely (FIXED — valid Python string join)
-    library_context = 
+    library_context = "
 
-.join(
+" .join( 
         f"[From {ch['source']}]
 {ch['text']}"
         for ch in selected_chunks
