@@ -206,15 +206,20 @@ if folder_ids:
         if added[0] > 0:
             st.success(f"Added {added[0]} file(s) (including sub‑folders) from folder {FOLDER_ID}.")
         else:
-            st.warning(f"No supported documents found in folder {FOLDER_ID}. Make sure the service account has access and the files are real (not shortcuts).")
+            st.warning(f"No supported documents found in folder {FOLDER_ID}.")
+
     # Save library to disk
     with open("library_chunks.pkl", "wb") as f:
         pickle.dump(st.session_state['library_chunks'], f)
 
-    # If library changed, prompt user to build an embeddings index
-    if len(st.session_state.get('embeddings', [])) != len(st.session_state.get('library_chunks', [])):
-        if st.button("Build / Rebuild Search Index"):
-            build_embeddings_index()
+# --- ALWAYS SHOW INDEX BUTTON ---
+st.markdown("---")
+st.subheader("Search Index")
+st.write(f"Chunks loaded: {len(st.session_state.get('library_chunks', []))}")
+st.write(f"Embeddings loaded: {len(st.session_state.get('embeddings', []))}")
+
+if st.button("Build / Rebuild Search Index"):
+    build_embeddings_index()
 
 # ------------------------------
 # AI FUNCTION AND USER UI
@@ -223,40 +228,48 @@ if folder_ids:
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
-    # No article generation yet — keep empty and safe
+    # No article generation yet
     article_context = ""
 
-    # Make sure we actually have documents
-    if not st.session_state.get("library_chunks"):
+    # Safety check
+    if not st.session_state.get('library_chunks'):
         st.warning("No documents available.")
         return ""
 
-    # Vector search
-    selected_chunks = search_chunks(question, top_k=12)
-    st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
+    # ---- SEARCH ----
+    selected_chunks = []
 
-    # Keyword fallback if vector search fails
+    # Use embeddings search ONLY if embeddings exist
+    if st.session_state.get('embeddings'):
+        selected_chunks = search_chunks(question, top_k=12)
+        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
+    else:
+        st.write("DEBUG — embeddings not built, skipping vector search")
+
+    # Keyword fallback (always available)
     if not selected_chunks:
         q_low = question.lower()
         selected_chunks = [
-            ch for ch in st.session_state["library_chunks"]
-            if q_low in ch["text"].lower()
+            ch for ch in st.session_state['library_chunks']
+            if q_low in ch['text'].lower()
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    # Build library context SAFELY
-    library_context = "\n\n".join(
-        f"[From {ch['source']}]\n{ch['text']}"
+        # Build context safely (FIXED — valid Python string join)
+    library_context = "
+
+".join(
+        f"[From {ch['source']}]
+{ch['text']}"
         for ch in selected_chunks
     )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
     prompt = f"""
-You are a scholarly Grokpedia-style assistant.
-
-Answer ONLY using the provided sources.
-If the sources do not clearly answer the question, say so.
+You are a Grokpedia-style scholarly assistant.
+Answer ONLY using the sources below.
+If the sources do not answer the question, say so.
 
 === SOURCES ===
 {library_context}
@@ -286,4 +299,3 @@ if question:
     answer = answer_question_or_generate_article(question)
     st.subheader("Answer")
     st.write(answer)
-
