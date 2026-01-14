@@ -236,7 +236,7 @@ def answer_question_or_generate_article(question: str) -> str:
         st.warning("No documents available.")
         return ""
 
-    # ---- SEARCH ----
+        # ---- SEARCH ----
     selected_chunks = []
 
     # Use embeddings search ONLY if embeddings exist
@@ -246,7 +246,7 @@ def answer_question_or_generate_article(question: str) -> str:
     else:
         st.write("DEBUG — embeddings not built, skipping vector search")
 
-        # Keyword fallback (always available)
+    # Keyword fallback (always available)
     if not selected_chunks:
         q_low = question.lower()
         selected_chunks = [
@@ -255,12 +255,11 @@ def answer_question_or_generate_article(question: str) -> str:
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-            # Build context safely (FIXED — valid Python string join)
+                # Build context safely (FIXED)
     library_context = "\n\n".join(
-    f"[From {ch['source']}]\n{ch['text']}"
-    for ch in selected_chunks
-)
-
+        f"[From {ch['source']}]\n{ch['text']}"
+        for ch in selected_chunks
+    )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
