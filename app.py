@@ -228,7 +228,6 @@ if st.button("Build / Rebuild Search Index"):
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
-    # ---- SAFETY CHECK ----
     if not st.session_state.get('library_chunks'):
         st.warning("No documents available.")
         return ""
@@ -252,11 +251,70 @@ def answer_question_or_generate_article(question: str) -> str:
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
+    # ---- BUILD CONTEXT (SAFE) ----
+    library_context = "
+
+".join(
+        f"[From {ch['source']}]
+{ch['text']}"
+        for ch in selected_chunks
+    )
+
+    st.write(f"DEBUG — library_context length = {len(library_context)}")
+
+    if not library_context:
+        return "I don’t have enough information in the provided sources to answer this question."
+
+    prompt = f"""
+You are a Grokpedia-style scholarly assistant.
+Answer ONLY using the sources below.
+If the sources do not answer the question, say so.
+
+=== SOURCES ===
+{library_context}
+
+=== QUESTION ===
+{question}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.15,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"OpenAI API error: {e}")
+        return ""
+
+    # ---- SEARCH ----
+    selected_chunks = []
+
+    embeddings = st.session_state.get('embeddings', [])
+    if isinstance(embeddings, list) and len(embeddings) > 0:
+        selected_chunks = search_chunks(question, top_k=12)
+        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
+    else:
+        st.write("DEBUG — embeddings not built, skipping vector search")
+
+    # ---- KEYWORD FALLBACK ----
+    if not selected_chunks:
+        q_low = question.lower()
+        selected_chunks = [
+            ch for ch in st.session_state['library_chunks']
+            if q_low in ch['text'].lower()
+        ][:12]
+        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
+
     # ---- BUILD CONTEXT (FIXED & SAFE) ----
-  library_context = "\n\n".join(
-    f"[From {ch['source']}]\n{ch['text']}"
-    for ch in selected_chunks
-)
+    library_context = "
+
+".join(
+        f"[From {ch['source']}]
+{ch['text']}"
+        for ch in selected_chunks
+    )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
