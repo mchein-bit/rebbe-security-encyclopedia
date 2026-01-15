@@ -265,22 +265,14 @@ if not library_context:
     return "I don’t have enough information in the provided sources to answer this question."
 
     prompt = (
-        "You are a Grokpedia-style scholarly assistant.
-"
-        "Answer ONLY using the sources below.
-"
-        "If the sources do not answer the question, say so.
-
-"
-        "=== SOURCES ===
-"
-        f"{library_context}
-
-"
-        "=== QUESTION ===
-"
-        f"{question}"
-    )
+    "You are a Grokpedia-style scholarly assistant.\n"
+    "Answer ONLY using the sources below.\n"
+    "If the sources do not answer the question, say so.\n\n"
+    "=== SOURCES ===\n"
+    f"{library_context}\n\n"
+    "=== QUESTION ===\n"
+    f"{question}"
+)
 
     try:
         response = client.chat.completions.create(
