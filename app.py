@@ -262,7 +262,7 @@ library_context = "\n\n".join(
 st.write(f"DEBUG — library_context length = {len(library_context)}")
 
 if not library_context:
-    return "I don’t have enough information in the provided sources to answer this question."
+   return "I don’t have enough information in the provided sources to answer this question."
 
     prompt = (
     "You are a Grokpedia-style scholarly assistant.\n"
