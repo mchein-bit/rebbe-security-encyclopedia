@@ -260,7 +260,7 @@ library_context = "\n\n".join(
 
 st.write(f"DEBUG — library_context length = {len(library_context)}")
 
-    prompt = f"""
+prompt = f"""
 You are a Grokpedia-style scholarly assistant.
 Answer ONLY using the sources below.
 If the sources do not answer the question, say so.
