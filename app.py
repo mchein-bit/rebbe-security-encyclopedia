@@ -228,179 +228,12 @@ if st.button("Build / Rebuild Search Index"):
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
-    if not st.session_state.get('library_chunks'):
-        st.warning("No documents available.")
-        return ""
+    # Ensure library exists
+    library = st.session_state.get('library_chunks', [])
+    if not library:
+        return "No documents are loaded yet."
 
-    # ---- SEARCH ----
-    selected_chunks = []
-
-    embeddings = st.session_state.get('embeddings', [])
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        selected_chunks = search_chunks(question, top_k=12)
-        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
-    else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
-
-    # ---- KEYWORD FALLBACK ----
-    if not selected_chunks:
-        q_low = question.lower()
-        selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
-        ][:12]
-        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
-
-    # ---- BUILD CONTEXT (SAFE) ----
-    library_context = "
-
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
-
-    st.write(f"DEBUG — library_context length = {len(library_context)}")
-
-    if not library_context:
-        return "I don’t have enough information in the provided sources to answer this question."
-
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
-
-=== SOURCES ===
-{library_context}
-
-=== QUESTION ===
-{question}
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
-
-    # ---- SEARCH ----
-    selected_chunks = []
-
-    embeddings = st.session_state.get('embeddings', [])
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        selected_chunks = search_chunks(question, top_k=12)
-        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
-    else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
-
-    # ---- KEYWORD FALLBACK ----
-    if not selected_chunks:
-        q_low = question.lower()
-        selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
-        ][:12]
-        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
-
-    # ---- BUILD CONTEXT (FIXED & SAFE) ----
-    library_context = "
-
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
-
-    st.write(f"DEBUG — library_context length = {len(library_context)}")
-
-    if not library_context:
-        return "I don’t have enough information in the provided sources to answer this question."
-
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
-
-=== SOURCES ===
-{library_context}
-
-=== QUESTION ===
-{question}
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
-
-    # ---- SEARCH ----
-    selected_chunks = []
-
-    embeddings = st.session_state.get('embeddings', [])
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        selected_chunks = search_chunks(question, top_k=12)
-        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
-    else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
-
-    # ---- KEYWORD FALLBACK ----
-    if not selected_chunks:
-        q_low = question.lower()
-        selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
-        ][:12]
-        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
-
-    # ---- BUILD CONTEXT (FIXED) ----
-    library_context = "
-
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
-
-    st.write(f"DEBUG — library_context length = {len(library_context)}")
-
-    if not library_context:
-        return "I don’t have enough information in the provided sources to answer this question."
-
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
-
-=== SOURCES ===
-{library_context}
-
-=== QUESTION ===
-{question}
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
-
-    # ---- SEARCH ----
+    # ---------------- SEARCH ----------------
     selected_chunks = []
 
     embeddings = st.session_state.get('embeddings', [])
@@ -414,33 +247,40 @@ If the sources do not answer the question, say so.
     if not selected_chunks:
         q_low = question.lower()
         selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
+            ch for ch in library if q_low in ch['text'].lower()
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    # ---- BUILD CONTEXT ----
+    # ---------------- BUILD CONTEXT ----------------
     library_context = "
 
 ".join(
         f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
+{ch['text']}" for ch in selected_chunks
     )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
+    if not library_context:
+        return "I don’t have enough information in the provided sources to answer this question."
 
-=== SOURCES ===
-{library_context}
+    prompt = (
+        "You are a Grokpedia-style scholarly assistant.
+"
+        "Answer ONLY using the sources below.
+"
+        "If the sources do not answer the question, say so.
 
-=== QUESTION ===
-{question}
-"""
+"
+        "=== SOURCES ===
+"
+        f"{library_context}
+
+"
+        "=== QUESTION ===
+"
+        f"{question}"
+    )
 
     try:
         response = client.chat.completions.create(
@@ -450,115 +290,7 @@ If the sources do not answer the question, say so.
         )
         return response.choices[0].message.content
     except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
-
-    # ---- SEARCH ----
-    selected_chunks = []
-
-    # Use embeddings search ONLY if embeddings exist AND are non-empty
-    embeddings = st.session_state.get('embeddings', [])
-    if isinstance(embeddings, list) and len(embeddings) > 0:
-        selected_chunks = search_chunks(question, top_k=12)
-        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
-    else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
-
-    # Keyword fallback (always available)
-    if not selected_chunks:
-        q_low = question.lower()
-        selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
-        ][:12]
-        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
-
-    # ---- BUILD CONTEXT ----
-    library_context = "
-
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
-
-    st.write(f"DEBUG — library_context length = {len(library_context)}")
-
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
-
-=== SOURCES ===
-{library_context}
-
-=== QUESTION ===
-{question}
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
-
-        # ---- SEARCH ----
-    selected_chunks = []
-
-    # Use embeddings search ONLY if embeddings exist
-    if st.session_state.get('embeddings'):
-        selected_chunks = search_chunks(question, top_k=12)
-        st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
-    else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
-
-    # Keyword fallback (always available)
-    if not selected_chunks:
-        q_low = question.lower()
-        selected_chunks = [
-            ch for ch in st.session_state['library_chunks']
-            if q_low in ch['text'].lower()
-        ][:12]
-        st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
-
-                # Build context safely (FIXED)
-    library_context = "
-
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
-
-    st.write(f"DEBUG — library_context length = {len(library_context)}")
-
-    prompt = f"""
-You are a Grokpedia-style scholarly assistant.
-Answer ONLY using the sources below.
-If the sources do not answer the question, say so.
-
-=== SOURCES ===
-{library_context}
-
-=== QUESTION ===
-{question}
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.15,
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"OpenAI API error: {e}")
-        return ""
+        return f"OpenAI API error: {e}"
 
 
 # ------------------------------
