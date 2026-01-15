@@ -252,14 +252,11 @@ def answer_question_or_generate_article(question: str) -> str:
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    # ---- BUILD CONTEXT ----
-    library_context = "
+library_context = "\n\n".join(
+    f"[From {ch['source']}]\n{ch['text']}"
+    for ch in selected_chunks
+)
 
-".join(
-        f"[From {ch['source']}]
-{ch['text']}"
-        for ch in selected_chunks
-    )
 
     st.write(f"DEBUG — library_context length = {len(library_context)}")
 
