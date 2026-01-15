@@ -253,6 +253,7 @@ def answer_question_or_generate_article(question: str) -> str:
 
     # ---------------- BUILD CONTEXT ----------------
 # ---------------- BUILD CONTEXT ----------------
+# ---------------- BUILD CONTEXT ----------------
 library_context = "\n\n".join(
     f"[From {ch['source']}]\n{ch['text']}"
     for ch in selected_chunks
@@ -260,8 +261,8 @@ library_context = "\n\n".join(
 
 st.write(f"DEBUG — library_context length = {len(library_context)}")
 
-    if not library_context:
-        return "I don’t have enough information in the provided sources to answer this question."
+if not library_context:
+    return "I don’t have enough information in the provided sources to answer this question."
 
     prompt = (
         "You are a Grokpedia-style scholarly assistant.
