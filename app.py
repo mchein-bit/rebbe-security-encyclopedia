@@ -228,12 +228,11 @@ if st.button("Build / Rebuild Search Index"):
 def answer_question_or_generate_article(question: str) -> str:
     st.write("Debug: AI function called")
 
-    # Ensure library exists
     library = st.session_state.get('library_chunks', [])
     if not library:
         return "No documents are loaded yet."
 
-    # ---------------- SEARCH ----------------
+    # ---------- SEARCH ----------
     selected_chunks = []
 
     embeddings = st.session_state.get('embeddings', [])
@@ -241,38 +240,36 @@ def answer_question_or_generate_article(question: str) -> str:
         selected_chunks = search_chunks(question, top_k=12)
         st.write(f"DEBUG — vector search returned {len(selected_chunks)} results")
     else:
-        st.write("DEBUG — embeddings not built, skipping vector search")
+        st.write("DEBUG — embeddings not built")
 
     # Keyword fallback
     if not selected_chunks:
         q_low = question.lower()
         selected_chunks = [
-            ch for ch in library if q_low in ch['text'].lower()
+            ch for ch in library if q_low in ch["text"].lower()
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    # ---------------- BUILD CONTEXT ----------------
-# ---------------- BUILD CONTEXT ----------------
-# ---------------- BUILD CONTEXT ----------------
-library_context = "\n\n".join(
-    f"[From {ch['source']}]\n{ch['text']}"
-    for ch in selected_chunks
-)
+    # ---------- BUILD CONTEXT ----------
+    library_context = "\n\n".join(
+        f"[From {ch['source']}]\n{ch['text']}"
+        for ch in selected_chunks
+    )
 
-st.write(f"DEBUG — library_context length = {len(library_context)}")
+    st.write(f"DEBUG — library_context length = {len(library_context)}")
 
-if not library_context:
-   return "I don’t have enough information in the provided sources to answer this question."
+    if not library_context:
+        return "I don’t have enough information in the provided sources to answer this question."
 
     prompt = (
-    "You are a Grokpedia-style scholarly assistant.\n"
-    "Answer ONLY using the sources below.\n"
-    "If the sources do not answer the question, say so.\n\n"
-    "=== SOURCES ===\n"
-    f"{library_context}\n\n"
-    "=== QUESTION ===\n"
-    f"{question}"
-)
+        "You are a Grokpedia-style scholarly assistant.\n"
+        "Answer ONLY using the sources below.\n"
+        "If the sources do not answer the question, say so.\n\n"
+        "=== SOURCES ===\n"
+        f"{library_context}\n\n"
+        "=== QUESTION ===\n"
+        f"{question}"
+    )
 
     try:
         response = client.chat.completions.create(
@@ -283,6 +280,7 @@ if not library_context:
         return response.choices[0].message.content
     except Exception as e:
         return f"OpenAI API error: {e}"
+
 
 
 # ------------------------------
