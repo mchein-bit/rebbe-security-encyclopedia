@@ -250,7 +250,7 @@ def answer_question_or_generate_article(question: str) -> str:
         ][:12]
         st.write(f"DEBUG — keyword fallback returned {len(selected_chunks)} results")
 
-    # ---------- BUILD CONTEXT ----------
+    # ---------------- BUILD CONTEXT ----------------
     library_context = "\n\n".join(
         f"[From {ch['source']}]\n{ch['text']}"
         for ch in selected_chunks
@@ -280,6 +280,7 @@ def answer_question_or_generate_article(question: str) -> str:
         return response.choices[0].message.content
     except Exception as e:
         return f"OpenAI API error: {e}"
+
 
 
 
