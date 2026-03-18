@@ -1,12 +1,6 @@
-openai
 streamlit
+openai
 python-docx
-PyPDF2
-streamlit
-docx
-openai
 google-api-python-client
 google-auth
-google-auth-oauthlib
-google-auth-httplib2
-
+PyPDF2
