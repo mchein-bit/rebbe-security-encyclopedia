@@ -6,6 +6,11 @@ from utils.styles import apply_global_styles
 from utils.storage import load_articles
 import docx
 
+# Always save data files to the repo root
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CHUNKS_FILE = os.path.join(ROOT_DIR, "library_chunks.pkl")
+EMBEDDINGS_FILE = os.path.join(ROOT_DIR, "embeddings.pkl")
+
 st.set_page_config(
     page_title="Admin — Rebbe Encyclopedia",
     page_icon="✡",
@@ -43,14 +48,14 @@ st.markdown("""
 # ── Initialize session state ──────────────────────────────────────────────────
 if "library_chunks" not in st.session_state:
     try:
-        with open("library_chunks.pkl","rb") as f:
+        with open(CHUNKS_FILE,"rb") as f:
             st.session_state["library_chunks"] = pickle.load(f)
     except FileNotFoundError:
         st.session_state["library_chunks"] = []
 
 if "embeddings" not in st.session_state:
     try:
-        with open("embeddings.pkl","rb") as f:
+        with open(EMBEDDINGS_FILE,"rb") as f:
             st.session_state["embeddings"] = pickle.load(f)
     except FileNotFoundError:
         st.session_state["embeddings"] = []
@@ -188,7 +193,7 @@ with col_main:
                 else:
                     st.warning(f"No files found in folder {fid}.")
             prog.empty()
-            with open("library_chunks.pkl","wb") as f:
+            with open(CHUNKS_FILE,"wb") as f:
                 pickle.dump(st.session_state["library_chunks"], f)
             st.success(f"✅ {len(st.session_state['library_chunks'])} total passages in library.")
             st.rerun()
@@ -224,7 +229,7 @@ with col_main:
                     vecs.append(None)
                 prog2.progress((i+1)/len(chunks), text=f"Indexing {i+1}/{len(chunks)}…")
             st.session_state["embeddings"] = vecs
-            with open("embeddings.pkl","wb") as f:
+            with open(EMBEDDINGS_FILE,"wb") as f:
                 pickle.dump(vecs, f)
             prog2.empty()
             st.success(f"✅ Index built — {len(vecs)} passages indexed.")
