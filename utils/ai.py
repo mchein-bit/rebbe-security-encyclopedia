@@ -6,6 +6,11 @@ from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# Always use the repo root directory for data files, no matter which page loads this
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CHUNKS_FILE = os.path.join(ROOT_DIR, "library_chunks.pkl")
+EMBEDDINGS_FILE = os.path.join(ROOT_DIR, "embeddings.pkl")
+
 ARTICLE_SYSTEM_PROMPT = """You are a senior scholar writing for the Rebbe's Encyclopedia — a Grokipedia-style knowledge base of the Lubavitcher Rebbe's teachings on Israel, security, and the Middle East as grounded in Torah.
 
 Your articles must:
@@ -107,14 +112,14 @@ def generate_article(question: str) -> dict | None:
     # Load library from disk if not in session
     if "library_chunks" not in st.session_state or not st.session_state["library_chunks"]:
         try:
-            with open("library_chunks.pkl", "rb") as f:
+            with open(CHUNKS_FILE, "rb") as f:
                 st.session_state["library_chunks"] = pickle.load(f)
         except FileNotFoundError:
             st.session_state["library_chunks"] = []
     
     if "embeddings" not in st.session_state:
         try:
-            with open("embeddings.pkl", "rb") as f:
+            with open(EMBEDDINGS_FILE, "rb") as f:
                 st.session_state["embeddings"] = pickle.load(f)
         except FileNotFoundError:
             st.session_state["embeddings"] = []
