@@ -75,6 +75,7 @@ with col_main:
         Sources: {', '.join(article.get('source_docs', [])[:3])}
         {f'&nbsp;·&nbsp; {date_str}' if date_str else ''}
       </div>
+      {f'<div style="margin-top:10px; font-size:0.78rem; color:#5a4a28; font-style:italic;">✦ Also drew from encyclopedia articles: {", ".join(article["built_on"][:2])}</div>' if article.get("built_on") else ''}
     </div>
     """, unsafe_allow_html=True)
 
