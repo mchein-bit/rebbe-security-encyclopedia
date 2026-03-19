@@ -93,17 +93,57 @@ def search_chunks(query: str, top_k: int = 14):
     q_low = query.lower()
     return [ch for ch in chunks if q_low in ch["text"].lower()][:top_k]
 
+def _search_published_articles(question: str, top_k: int = 4) -> list[dict]:
+    """Search previously published encyclopedia articles for relevant content."""
+    import json, os
+    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    articles_file = os.path.join(ROOT_DIR, "articles.json")
+    try:
+        with open(articles_file, "r", encoding="utf-8") as f:
+            articles = json.load(f)
+    except Exception:
+        return []
+
+    if not articles:
+        return []
+
+    # Build searchable text from each article and score by embedding similarity
+    q_vec = _get_embedding(question)
+    scored = []
+
+    for art in articles:
+        # Combine title + summary + all section content into one searchable block
+        full_text = art.get("title", "") + " " + art.get("summary", "")
+        for sec in art.get("sections", []):
+            full_text += " " + sec.get("content", "")
+        for q in art.get("rebbe_quotes", []):
+            full_text += " " + q.get("quote", "")
+
+        if q_vec:
+            vec = _get_embedding(full_text[:2000])  # embed first 2000 chars
+            if vec:
+                scored.append((_cosine_similarity(q_vec, vec), art))
+        else:
+            # keyword fallback
+            if question.lower() in full_text.lower():
+                scored.append((1.0, art))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [a for _, a in scored[:top_k]]
+
+
 def generate_article(question: str) -> dict | None:
-    """Generate a full structured article from the question using source documents."""
-    
-    # Load library from disk if not in session
+    """Generate a full structured article, drawing from both source documents
+    AND previously published encyclopedia articles."""
+
+    # ── Load source document chunks ───────────────────────────────────────
     if "library_chunks" not in st.session_state or not st.session_state["library_chunks"]:
         try:
             with open(CHUNKS_FILE, "rb") as f:
                 st.session_state["library_chunks"] = pickle.load(f)
         except FileNotFoundError:
             st.session_state["library_chunks"] = []
-    
+
     if "embeddings" not in st.session_state:
         try:
             with open(EMBEDDINGS_FILE, "rb") as f:
@@ -111,22 +151,44 @@ def generate_article(question: str) -> dict | None:
         except FileNotFoundError:
             st.session_state["embeddings"] = []
 
-    chunks = search_chunks(question, top_k=16)
-    
-    if not chunks:
+    # ── Search source documents ───────────────────────────────────────────
+    doc_chunks = search_chunks(question, top_k=14)
+
+    # ── Search published encyclopedia articles ────────────────────────────
+    related_articles = _search_published_articles(question, top_k=3)
+
+    if not doc_chunks and not related_articles:
         return None
-    
-    context = "\n\n".join(
-        f"[Source: {ch['source']}]\n{ch['text']}"
-        for ch in chunks
-    )
-    
+
+    # ── Build context block from source documents ─────────────────────────
+    context_parts = []
+
+    if doc_chunks:
+        doc_context = "\n\n".join(
+            f"[Source document: {ch['source']}]\n{ch['text']}"
+            for ch in doc_chunks
+        )
+        context_parts.append("=== SOURCE DOCUMENTS ===\n" + doc_context)
+
+    # ── Build context block from published articles ───────────────────────
+    if related_articles:
+        art_context_parts = []
+        for art in related_articles:
+            art_text = f"[Published article: \"{art['title']}\"]\n"
+            art_text += f"Summary: {art.get('summary','')}\n"
+            for sec in art.get("sections", [])[:3]:  # first 3 sections only
+                art_text += f"\n{sec.get('heading','')}:\n{sec.get('content','')[:600]}"
+            art_context_parts.append(art_text)
+        context_parts.append("=== RELATED ENCYCLOPEDIA ARTICLES (already published — you may reference and build on these) ===\n" + "\n\n".join(art_context_parts))
+
+    full_context = "\n\n".join(context_parts)
+
     user_prompt = (
         f"Write a complete encyclopedia article answering this question: \"{question}\"\n\n"
-        f"=== SOURCE PASSAGES ===\n{context}\n\n"
-        "Remember: Return ONLY valid JSON matching the specified structure. No markdown fences."
+        f"{full_context}\n\n"
+        "Remember: Return ONLY valid JSON. No markdown fences."
     )
-    
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -134,13 +196,13 @@ def generate_article(question: str) -> dict | None:
                 {"role": "system", "content": ARTICLE_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.15,
-            max_tokens=3000,
+            temperature=0.2,
+            max_tokens=4000,
         )
-        
+
         raw = response.choices[0].message.content.strip()
-        
-        # Strip any accidental markdown fences
+
+        # Strip accidental markdown fences
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -148,12 +210,14 @@ def generate_article(question: str) -> dict | None:
         if raw.endswith("```"):
             raw = raw[:-3]
         raw = raw.strip()
-        
+
         article = json.loads(raw)
         article["question"] = question
-        article["source_docs"] = list(dict.fromkeys(ch["source"] for ch in chunks))
+        article["source_docs"] = list(dict.fromkeys(ch["source"] for ch in doc_chunks))
+        if related_articles:
+            article["built_on"] = [a["title"] for a in related_articles]
         return article
-    
+
     except json.JSONDecodeError as e:
         st.error(f"Could not parse AI response as JSON: {e}")
         return None
