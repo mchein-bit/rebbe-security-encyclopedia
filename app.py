@@ -1,6 +1,10 @@
 import streamlit as st
-from utils.storage import load_articles, get_articles_by_category, CATEGORIES
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from utils.storage import load_articles, get_articles_by_category, CATEGORIES, add_article
 from utils.styles import apply_global_styles
+from utils.ai import generate_article
 
 st.set_page_config(
     page_title="Rebbe Encyclopedia — Israel & the Middle East",
@@ -10,6 +14,16 @@ st.set_page_config(
 )
 
 apply_global_styles()
+
+CAT_ICONS = {
+    "Principles & Halacha": "⚖️",
+    "Wars & Military Operations": "🎖️",
+    "People": "👤",
+    "Diplomacy & Peace Negotiations": "🤝",
+    "Territories & Geography": "🗺️",
+    "Prophecy & Spiritual Dimensions": "✡️",
+    "Other": "📖",
+}
 
 # ── Hero ──────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -26,19 +40,36 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Ask a question CTA ────────────────────────────────────────────────────────
+# ── Ask a question — generates RIGHT HERE, no redirect ───────────────────────
 st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
 
 col_l, col_mid, col_r = st.columns([1, 3, 1])
 with col_mid:
     st.markdown('<p class="ask-label">Ask a question — the AI will write a full article from the Rebbe\'s teachings</p>', unsafe_allow_html=True)
     question = st.text_input("", placeholder="e.g. What did the Rebbe say about the Sinai withdrawal?", label_visibility="collapsed", key="homepage_q")
-    if st.button("✦ Generate Article", use_container_width=True, key="homepage_ask"):
-        if question.strip():
-            st.session_state["pending_question"] = question.strip()
-            st.switch_page("pages/2_Ask.py")
-        else:
+    st.markdown("""
+    <p style="font-size:0.82rem; color:#4a3d28; margin-top:4px; margin-bottom:12px;">
+    💡 Try: <em>"What is the 329 Paradigm?"</em> &nbsp;·&nbsp;
+    <em>"The Rebbe's view on Operation Litani"</em> &nbsp;·&nbsp;
+    <em>"What does Torah say about land for peace?"</em>
+    </p>
+    """, unsafe_allow_html=True)
+    generate_btn = st.button("✦ Generate Article", use_container_width=True, key="homepage_ask", type="primary")
+
+if generate_btn:
+    if not question.strip():
+        with col_mid:
             st.warning("Please type a question first.")
+    else:
+        with col_mid:
+            with st.spinner("Searching the Rebbe's teachings and writing article…"):
+                article = generate_article(question.strip())
+            if article is None:
+                st.error("Could not generate the article. Make sure documents are loaded in the Admin panel first.")
+            else:
+                article_id = add_article(article)
+                st.session_state["open_article_id"] = article_id
+                st.switch_page("pages/4_Article.py")
 
 # ── Category Browse ───────────────────────────────────────────────────────────
 st.markdown('<div class="section-gap"></div>', unsafe_allow_html=True)
@@ -46,19 +77,7 @@ st.markdown('<h2 class="section-title">Browse by Category</h2>', unsafe_allow_ht
 
 all_articles = load_articles()
 total = len(all_articles)
-
 st.markdown(f'<p class="article-count">Encyclopedia contains <strong>{total}</strong> article{"s" if total != 1 else ""}</p>', unsafe_allow_html=True)
-
-# Category icons
-CAT_ICONS = {
-    "Principles & Halacha": "⚖️",
-    "Wars & Military Operations": "🎖️",
-    "People": "👤",
-    "Diplomacy & Peace Negotiations": "🤝",
-    "Territories & Geography": "🗺️",
-    "Prophecy & Spiritual Dimensions": "✡️",
-    "Other": "📖",
-}
 
 cols = st.columns(3)
 for i, cat in enumerate(CATEGORIES):
