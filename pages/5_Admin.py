@@ -165,7 +165,10 @@ with col_main:
                     placeholder.info(f"Loading: {item['name']}…")
                     text = _extract_text(item, svc)
                     if text:
-                        chunk_size, overlap = 120, 20
+                        # 300-word chunks with 60-word overlap
+                        # This keeps full thoughts/paragraphs together
+                        # so the AI reads complete ideas, not cut-off sentences
+                        chunk_size, overlap = 300, 60
                         words = text.split()
                         i = 0
                         while i < len(words):
